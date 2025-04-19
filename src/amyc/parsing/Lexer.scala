@@ -8,6 +8,7 @@ import silex._
 
 import amyc.utils.Position
 
+
 // The lexer for Amy.
 object AmyLexer extends Pipeline[List[File], Iterator[Token]]
                 with Lexers {
@@ -50,7 +51,7 @@ object AmyLexer extends Pipeline[List[File], Iterator[Token]]
 
   // Type of characters consumed.
   type Character = Char
-
+  
   // Type of positions.
   type Position = SourcePosition
 
@@ -58,8 +59,12 @@ object AmyLexer extends Pipeline[List[File], Iterator[Token]]
   type Token = parsing.Token
 
   import Tokens._
+  
+  
+
 
   val lexer = Lexer(
+
     // Keywords,
     word("abstract") | word("case") | word("class") |
     word("def") | word("else") | word("extends") |
@@ -69,41 +74,70 @@ object AmyLexer extends Pipeline[List[File], Iterator[Token]]
 
     // Primitive type names,
     // TODO
-    
+    word("Int") | word("String") | word("Boolean") | word("Unit")
+      |> {(cs, range) => PrimTypeToken(cs.mkString).setPos(range._1)},
 
     // Boolean literals,
     // TODO
+    word("true") |> {(cs, range) => BoolLitToken(true).setPos(range._1)},
+    word("false") |> {(cs, range) => BoolLitToken(false).setPos(range._1)},
+
 
     // Operators,
     // NOTE: You can use `oneof("abc")` as a shortcut for `word("a") | word("b") | word("c")`
     // TODO
-    
+    word("++") | word("==") | word("<=") | word("&&") | word("||") | oneOf("<!+-*/%") 
+    |> {(cs, range) => OperatorToken(cs.mkString).setPos(range._1)},
+
     // Identifiers,
     // TODO
-    
+    // does not accept identifiers starting by a digit or a '_' // TODO watch ed 
+    many1(elem(_.isLetter)~many(elem('_') | elem(_.isDigit)))
+    |> {(cs, range) => IdentifierToken(cs.mkString).setPos(range._1)},
+
     // Integer literal,
     // NOTE: Make sure to handle invalid (e.g. overflowing) integer values safely by
     //       emitting an ErrorToken instead.
     // TODO
-    
+    many1(elem(_.isDigit)) |> { (cs, range) => {
+      val int_value = cs.mkString.toIntOption
+      int_value match
+        case None => ErrorToken(s"Integer overflow or underflow for the following token. ${cs.mkString} \n")
+        case Some(value) => IntLitToken(value).setPos(range._1)
+      }
+    },
+
     // String literal,
     // TODO
+    elem('"')~many(elem(x => (x != '\n' && x != '"')))~elem('"')
+      |> {(cs, range) => StringLitToken(cs.mkString.filterNot(c => c=='"')).setPos(range._1)},
     
     // Delimiters,
     // TODO
-
+ 
+    word("=>") | oneOf(".,:;(){}[]=")
+      |> {(cs, range) => DelimiterToken(cs.mkString).setPos(range._1)},
+    
 
     // Whitespace,
     // TODO
+    many1(elem('\t') | elem(' ') | elem('\n') | elem('\r')) |> {(cs, range) => SpaceToken().setPos(range._1)},
 
     // Single line comment,
-    word("//") ~ many(elem(_ != '\n'))
-      |> { cs => CommentToken(cs.mkString("")) },
+
+    word("//") ~ many(elem(_ != '\n'))  |> { cs => CommentToken(cs.mkString) },
+    
 
     // Multiline comments,
     // NOTE: Amy does not support nested multi-line comments (e.g. `/* foo /* bar */ */`).
     //       Make sure that unclosed multi-line comments result in an ErrorToken.
     // TODO
+   
+   
+  word("/*")~many(elem(_!='*') | many1(elem('*'))~elem(x => x!='/' && x!='*'))~many1(elem('*'))~elem('/')
+    |> {cs => CommentToken(cs.mkString)},
+  word("/*")|> {_ => ErrorToken("Unclosed comment !!")}
+
   ) onError {
     // We also emit ErrorTokens for Silex-handled errors.
     (cs, range) => ErrorToken(cs.mkString).setPos(range._1)
@@ -112,15 +146,23 @@ object AmyLexer extends Pipeline[List[File], Iterator[Token]]
     pos => EOFToken().setPos(pos)
   }
 
+
+
+
+
   override def run(ctx: amyc.utils.Context)(files: List[File]): Iterator[Token] = {
     var it = Seq[Token]().iterator
 
     for (file <- files) {
       val source = Source.fromFile(file.toString, SourcePositioner(file))
       it ++= lexer.spawn(source).filter {
-        token =>
+        token => 
           // TODO: Remove all whitespace and comment tokens
-          ???
+          token match
+            case CommentToken(_) => false
+            case SpaceToken() => false
+            case _ => true
+
       }.map {
         case token@ErrorToken(error) => ctx.reporter.fatal("Unknown token at " + token.position + ": " + error)
         case token => token

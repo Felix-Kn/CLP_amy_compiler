@@ -5,6 +5,7 @@ import amyc.utils._
 import amyc.ast.SymbolicTreeModule._
 import amyc.ast.Identifier
 
+
 // The type checker for Amy
 // Takes a symbolic program and rejects it if it does not follow the Amy typing rules.
 object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTable)] {
@@ -36,30 +37,111 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
       def topLevelConstraint(found: Type): List[Constraint] =
         List(Constraint(found, expected, e.position))
       
+      val genBinConstraints = (lhs:Expr, rhs:Expr, genT:Type, binT:Type) 
+        => genConstraints(lhs, genT) ++ genConstraints(rhs, genT) ++ topLevelConstraint(binT)
+
       e match {
-        case IntLiteral(_) =>
-          topLevelConstraint(IntType)
+        case Error(error) => 
+          genConstraints(error, StringType)
+          
+        // val call
+        case Variable(name) => 
+          topLevelConstraint(env.get(name).get)
+        // Literal types
+        case IntLiteral(_) => topLevelConstraint(IntType)
+        case BooleanLiteral(_) => topLevelConstraint(BooleanType)
+        case StringLiteral(_) => topLevelConstraint(StringType)
+        case UnitLiteral() => topLevelConstraint(UnitType)
+
+        // Boolean operations
+        case And(lhs, rhs) => genBinConstraints(lhs, rhs, BooleanType, BooleanType)
+        case Or(lhs, rhs) => genBinConstraints(lhs, rhs, BooleanType, BooleanType)
+        case Not(newE) => genConstraints(newE, BooleanType) ++ topLevelConstraint(BooleanType)
+
+        // Int operations
+        case Plus(lhs, rhs) => genBinConstraints(lhs, rhs, IntType, IntType)
+        case Times(lhs, rhs) => genBinConstraints(lhs, rhs, IntType, IntType)
+        case Div(lhs, rhs) => genBinConstraints(lhs, rhs, IntType, IntType)
+        case Mod(lhs, rhs) => genBinConstraints(lhs, rhs, IntType, IntType)
+        case Minus(lhs, rhs) => genBinConstraints(lhs, rhs, IntType, IntType)
+        case Neg(newE) => genConstraints(newE, IntType) ++ topLevelConstraint(IntType)
+
+        case LessThan(lhs, rhs) => genBinConstraints(lhs, rhs, IntType, BooleanType)
+        case LessEquals(lhs, rhs) => genBinConstraints(lhs, rhs, IntType, BooleanType)
+        
+        // String operation
+        case Concat(lhs, rhs) => genBinConstraints(lhs, rhs, StringType, StringType)
+
+        //
         case Equals(lhs, rhs) =>
+          val eqt = TypeVariable.fresh()
+          genBinConstraints(lhs, rhs, eqt, BooleanType)
+         
+        case Sequence(e1, e2) => 
+          val newConstraint = TypeVariable.fresh()
+          genConstraints(e1, newConstraint) ++ genConstraints(e2, expected)
+
+        case Ite(cond, e1, e2) => 
+          genConstraints(cond, BooleanType) ++ genConstraints(e1, expected) ++ genConstraints(e2, expected)
+
+        case Call(name, args) => 
+          val funProperties = table.getFunction(name) match
+            case None => table.getConstructor(name).get
+            case Some(value) => value
+          
+          val argsConstraints = args
+            .zip(funProperties.argTypes)
+            .map((arg, argType) => genConstraints(arg, argType))
+            .flatten
+          topLevelConstraint(funProperties.retType) ++ argsConstraints
+        
+        case Let(df: ParamDef, value: Expr, body: Expr) => 
+          genConstraints(value, df.tt.tpe) ++ genConstraints(body, expected)(env.updated(df.name, df.tt.tpe))
+
+        
           // HINT: Take care to implement the specified Amy semantics
-          ???  // TODO
+          // TODO
+        
+            
         case Match(scrut, cases) =>
           // Returns additional constraints from within the pattern with all bindings
           // from identifiers to types for names bound in the pattern.
           // (This is analogous to `transformPattern` in NameAnalyzer.)
           def patternBindings(pat: Pattern, expected: Type): (List[Constraint], Map[Identifier, Type]) = {
-            ???  // TODO
+            pat match
+              case WildcardPattern() => (Nil, Map())
+              case IdPattern(name) => 
+                env.get(name) match
+                  case None => (Nil, Map((name, expected)))
+                  case Some(existingType) =>(topLevelConstraint(existingType), Map())
+              case LiteralPattern(lit) => (genConstraints(lit, expected), Map())
+
+              case CaseClassPattern(name, args) => 
+                
+                val constructor = table
+                  .getConstructor(name)
+                  .get                  
+
+                val (constraints, newIds) = 
+                  args.zip(constructor.argTypes)
+                  .map((pat, patType) => patternBindings(pat, patType))
+                  .fold((Nil, Map()))((a, b) => (a._1++b._1, a._2++b._2))
+
+                (constraints :+ Constraint(constructor.retType, expected, pat.position), newIds)
+            
           }
 
           def handleCase(cse: MatchCase, scrutExpected: Type): List[Constraint] = {
             val (patConstraints, moreEnv) = patternBindings(cse.pat, scrutExpected)
-            ???  // TODO
+            patConstraints ++ genConstraints(cse.expr, expected)(env++moreEnv) 
           }
 
           val st = TypeVariable.fresh()
           genConstraints(scrut, st) ++
           cases.flatMap(cse => handleCase(cse, st))
+
         
-          ???  // TODO: Implement the remaining cases
+          // TODO: Implement the remaining cases
       }
     }
 
@@ -88,7 +170,23 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
         case Constraint(found, expected, pos) :: more =>
           // HINT: You can use the `subst_*` helper above to replace a type variable
           //       by another type in your current set of constraints.
-          ???  // TODO
+          // TODO
+          (found, expected) match
+            case (TypeVariable(id1), TypeVariable(id2)) => 
+              val updatedConstraints = subst_*(more, id1, expected)
+              solveConstraints(updatedConstraints)
+
+            case (TypeVariable(id), expectedType) => 
+              val updatedConstraints = subst_*(more, id, expectedType)
+              solveConstraints(updatedConstraints)
+            
+            case (actual, TypeVariable(id)) => 
+              val updatedConstraints = subst_*(more, id, actual)
+              solveConstraints(updatedConstraints)
+
+            case (left, right) => 
+              if left.toString != right.toString then ctx.reporter.error(f"Type conflict @ ${pos} => Resolved type: ${left} != Expected type : ${right} \n")
+              solveConstraints(more) 
       }
     }
 

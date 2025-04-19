@@ -51,12 +51,146 @@ object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
     // Additional arguments are a mapping from identifiers (parameters and variables) to
     // their index in the wasm local variables, and a LocalsHandler which will generate
     // fresh local slots as required.
+    
+
     def cgExpr(expr: Expr)(implicit locals: Map[Identifier, Int], lh: LocalsHandler): Code = {
       expr match {
         case IntLiteral(i) =>
           // Push i to the stack.
           // The comments are optional but can help you debug.
           Comment(expr.toString) <:> Const(i)
+
+        case StringLiteral(value) => 
+           Comment(expr.toString) <:> mkString(value)
+
+        case BooleanLiteral(value) => 
+          Comment(expr.toString) <:> Const(if value then 1 else 0)
+
+        case UnitLiteral() => 
+          Comment(expr.toString) <:> Const(0)
+
+        case Variable(name) => Comment(expr.toString) <:> GetLocal(locals.get(name).get)
+
+        // unary operators
+        case Not(e) =>
+          Comment(expr.toString) <:> 
+          cgExpr(e) <:>
+          Eqz
+        
+        case Neg(e) => 
+          Comment(expr.toString) <:> 
+          cgExpr(e) <:> 
+          Const(-1) <:>
+          Mul
+
+        // binary operators
+        
+        case Plus(lhs, rhs) => 
+          Comment(expr.toString) <:>
+          cgExpr(lhs)<:> cgExpr(rhs) <:>
+          Add
+
+        case Minus(lhs, rhs) => 
+          Comment(expr.toString) <:>
+          cgExpr(lhs)<:> cgExpr(rhs) <:>
+          Sub
+        
+        case Times(lhs, rhs) => 
+          Comment(expr.toString) <:>
+          cgExpr(lhs)<:> cgExpr(rhs) <:>
+          Mul
+        
+        case AmyDiv(lhs, rhs) => 
+          Comment(expr.toString) <:>
+          cgExpr(lhs)<:> cgExpr(rhs) <:>
+          Div
+        
+        case Mod(lhs, rhs) => 
+          Comment(expr.toString) <:>
+          cgExpr(lhs)<:> cgExpr(rhs) <:>
+          Rem
+        
+        case LessThan(lhs, rhs) => 
+          Comment(expr.toString) <:>
+          cgExpr(lhs) <:> cgExpr(rhs) <:>
+          Lt_s
+
+        case LessEquals(lhs, rhs) => 
+          Comment(expr.toString) <:>
+          cgExpr(lhs)<:> cgExpr(rhs) <:>
+          Le_s
+        
+        case AmyAnd(lhs, rhs) => 
+          Comment(expr.toString) <:>
+          cgExpr(lhs)<:> cgExpr(rhs) <:>
+          And
+        
+        case AmyOr(lhs, rhs) => 
+          Comment(expr.toString) <:>
+          cgExpr(lhs)<:> cgExpr(rhs) <:>
+          Or
+
+        case Equals(lhs, rhs) => 
+          Comment(expr.toString) <:>
+          cgExpr(lhs)<:> cgExpr(rhs) <:>
+          Eq 
+        
+        case Concat(lhs, rhs) => 
+          Comment(expr.toString) <:>
+          cgExpr(lhs)<:> cgExpr(rhs) <:>
+          Call("String_concat")
+        
+        // error 
+        case Error(msg) => 
+          Comment(expr.toString) <:> 
+          cgExpr(msg) <:> 
+          Call("Std_printString") <:>
+          Unreachable
+        
+
+        case AmyCall(qname, args) => 
+          table.getFunction(qname) match
+            case Some(func) => {
+              val argsCode = args.map(cgExpr(_)).reduceLeftOption((l,r) => l<:>r)
+              argsCode match
+              case None => Comment(expr.toString) <:> Call(fullName(func.owner, qname))
+              case Some(value) => Comment(expr.toString) <:> value <:> Call(fullName(func.owner, qname))
+            }
+            case None => 
+              val constructor = table.getConstructor(qname).getOrElse(ctx.reporter.fatal("Name analyzer failed !!"))
+              val objectCode = List(Code(List(Const(constructor.index)))) ++ args.map(cgExpr(_))
+              val nbI32Towrite = objectCode.size
+              val storedObject = for (code, index) <- objectCode.zipWithIndex
+                yield GetGlobal(memoryBoundary) <:> Const(index) <:> Add <:> code <:> Store
+
+              val newMemIndex = GetLocal(memoryBoundary) <:> Const(nbI32Towrite) <:> SetGlobal(memoryBoundary)
+              storedObject <:> newMemIndex
+          
+          
+        case Sequence(e1, e2) => 
+          Comment(expr.toString) <:>
+          cgExpr(e1) <:> 
+          Drop <:> 
+          cgExpr(e2)
+
+                  
+        case Ite(cond, thenn, elze) => 
+          Comment(expr.toString) <:>
+          cgExpr(cond) <:>
+          If_i32 <:>
+          cgExpr(thenn) <:>
+          Else <:>
+          cgExpr(elze) <:>
+          End
+        
+        case Let(df, value, body) => 
+          val newId = lh.getFreshLocal()
+          Comment(expr.toString) <:>
+          cgExpr(value) <:>
+          SetLocal(newId) <:> 
+          cgExpr(body)(locals+(df.name-> newId), lh)
+
+
 
         case Match(scrut, cases) =>
 
@@ -77,12 +211,13 @@ object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
             
             case _ => ???
           }
-
           ???
-        
-        case _ => ???
+
+      
       }
     }
+
+
 
     Module(
       program.modules.last.name.name,
