@@ -125,59 +125,48 @@ object Parser extends Pipeline[Iterator[Token], Program]
         case Match(_, cases) => Match(leftExpr, cases)
     })
 
+  def foldSequences = (seqList :Seq[Expr]) => {
+    assert(!seqList.isEmpty)
+    val newList = seqList.init
+    val lastElem = seqList.last
+    newList.foldRight(lastElem)((leftExpr, rightExpr) => Sequence(leftExpr, rightExpr))
+  }
+    
   // An expression.
   // HINT: You can use `operators` to take care of associativity and precedence
+
+  // Stop the expr recursion when we hit a newVal definition
+  // newVal will then create a new sequence with old-Context + newVal 
   lazy val expr: Syntax[Expr] = recursive { 
-    (E ~ opt(many1(matchs)) ~ opt(moreSeq)).map{
-      case firstExpre ~ optMatchs ~ optSeq => 
-        // check if E was a val def
-        val valFirstExpr = firstExpre match
-          case Let(df, value, body) => body
-          case _ => firstExpre
+    ((exprNoVal ~ opt(";" ~ expr))|| newVal).map{
 
-        // check and compute chained matchs
-        val newFirstExpr = optMatchs match
-          case None => valFirstExpr
-          case Some(manyMatch) => foldMatchs(valFirstExpr)(manyMatch)
+      case toTest => toTest match
+        // case Sequence of not newVal
+        case Left(notVal1 ~ optNextExpr) => 
+          optNextExpr match
+            case None => notVal1
+            case Some(_ ~ nextExpr) => Sequence(notVal1, nextExpr)
+          
+        case Right(isVal1) => isVal1
+    }
+  }     
 
-        // link end of values and Sequences
-        (optSeq, firstExpre) match
-          case (None, Let(df, value, _)) =>  Let(df, value, newFirstExpr)
-          case (Some(Sequence(_, nextExpr)), Let(df, value, _)) => Sequence(Let(df, value, newFirstExpr), nextExpr)
-          case (Some(Sequence(_, nextExpr)), _) => Sequence(newFirstExpr, nextExpr)
-          case (_,_) => newFirstExpr
-    }     
+  lazy val newVal: Syntax[Expr] = {
+    (kw("val") ~ parameter ~ "=" ~ exprNoVal ~ ";" ~ expr).map{
+      case _ ~ param ~ _ ~ expr1 ~ _ ~ expr2 => Let(param, expr1, expr2) 
+    }
   }
 
-  lazy val moreSeq: Syntax[Expr] = 
-    (";" ~ expr).map{
-      case _ ~ newExpr => Sequence(UnitLiteral(), newExpr)
-    }
-
-  lazy val moreMatch: Syntax[Expr] = 
-    (E ~ opt(many1(matchs))).map{
-      case firstExpre ~ optMatchs  => 
-      optMatchs match
-          case None => firstExpre
-          case Some(manyMatch) => foldMatchs(firstExpre)(manyMatch)
-    }
 
   // first expr of a val can not contain a val
-  lazy val exprNoVal: Syntax[Expr] = recursive {
+  lazy val exprNoVal: Syntax[Expr] =
     (N ~ opt(many1(matchs))).map{
       case firstExpre ~ optMatchs => 
         optMatchs match
         case None => firstExpre
         case Some(manyMatch) => foldMatchs(firstExpre)(manyMatch)           
     }
-  }
-    
-  // indirection for head of sequence 
-  lazy val E: Syntax[Expr] = recursive{
-     N | newVal  
-  }
-    
-  // head of sequence without val  
+  
   lazy val N: Syntax[Expr] = 
     operators | ifThenElse 
   
@@ -214,7 +203,7 @@ object Parser extends Pipeline[Iterator[Token], Program]
       Level(op("&&"), LeftAssociative),
       Level(op("||"), LeftAssociative)
       )((left, op, right) =>
-        op match
+        (op: @unchecked )match
           case OperatorToken(operator) => operatorTranslation(left, operator, right).setPos(op))
 
   
@@ -233,12 +222,7 @@ object Parser extends Pipeline[Iterator[Token], Program]
       case "++" => Concat(left, right)
   )
 
-  // to avoid first follow conflic on ;, when having two tails in a row, recurse on E (new Head) 
-  lazy val newVal: Syntax[Expr] = 
-    (kw("val") ~ parameter ~ "=" ~ exprNoVal ~ ";" ~ E).map{
-      case _ ~ param ~ _ ~ expr1 ~ _ ~ expr2 => Let(param, expr1, expr2)
-    }
-
+  
   lazy val ifThenElse: Syntax[Expr] = 
     (kw("if") ~ "(" ~ expr ~ ")" ~ "{" ~ expr ~ "}" ~ kw("else") ~ "{" ~ expr ~ "}").map{
       case _ ~ _ ~ cond ~ _ ~ _ ~ thenn ~ _ ~ _ ~ _ ~ elze ~ _ => Ite(cond, thenn, elze)
