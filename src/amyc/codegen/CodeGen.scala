@@ -8,6 +8,10 @@ import amyc.utils.{Context, Pipeline}
 import wasm._
 import Instructions._
 import Utils._
+import scala.collection.immutable.Stream.Cons
+import amyc.ast.TreeModule.Expr
+
+val I32Size = 4
 
 // Generates WebAssembly code for an Amy program
 object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
@@ -122,13 +126,21 @@ object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
         
         case AmyAnd(lhs, rhs) => 
           Comment(expr.toString) <:>
-          cgExpr(lhs)<:> cgExpr(rhs) <:>
-          And
+          cgExpr(lhs) <:>
+          If_i32 <:>
+          cgExpr(rhs) <:>
+          Else <:>
+          Const(0) <:>
+          End
         
         case AmyOr(lhs, rhs) => 
           Comment(expr.toString) <:>
-          cgExpr(lhs)<:> cgExpr(rhs) <:>
-          Or
+          cgExpr(lhs) <:>
+          If_i32 <:>
+          Const(1) <:>
+          Else <:>
+          cgExpr(rhs) <:>
+          End
 
         case Equals(lhs, rhs) => 
           Comment(expr.toString) <:>
@@ -157,14 +169,23 @@ object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
               case Some(value) => Comment(expr.toString) <:> value <:> Call(fullName(func.owner, qname))
             }
             case None => 
-              val constructor = table.getConstructor(qname).getOrElse(ctx.reporter.fatal("Name analyzer failed !!"))
+              val constructor = table.getConstructor(qname).get
               val objectCode = List(Code(List(Const(constructor.index)))) ++ args.map(cgExpr(_))
               val nbI32Towrite = objectCode.size
               val storedObject = for (code, index) <- objectCode.zipWithIndex
-                yield GetGlobal(memoryBoundary) <:> Const(index) <:> Add <:> code <:> Store
+                yield GetGlobal(memoryBoundary) <:> 
+                      Const(index*I32Size) <:>
+                      Add <:> 
+                      code <:>
+                      Store
 
-              val newMemIndex = GetLocal(memoryBoundary) <:> Const(nbI32Towrite) <:> SetGlobal(memoryBoundary)
-              storedObject <:> newMemIndex
+              val newMemIndex = GetGlobal(memoryBoundary) <:> // return Address
+                                GetGlobal(memoryBoundary) <:>
+                                Const(nbI32Towrite*I32Size) <:> 
+                                Add <:> 
+                                SetGlobal(memoryBoundary)
+
+              Comment(expr.toString) <:> storedObject <:> newMemIndex
           
           
         case Sequence(e1, e2) => 
@@ -193,11 +214,16 @@ object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
 
 
         case Match(scrut, cases) =>
-
+            
           // Checks if a value matches a pattern.
           // Assumes value is on top of stack (and CONSUMES it)
           // Returns the code to check the value, and a map of bindings.
           def matchAndBind(pat: Pattern): (Code, Map[Identifier, Int]) = pat match {
+            case WildcardPattern() =>
+              (Comment(pat.toString) <:> 
+              Drop <:> 
+              Const(1), Map())
+
             case IdPattern(id) =>
               val idLocal = lh.getFreshLocal()
               (Comment(pat.toString) <:> 
@@ -208,12 +234,53 @@ object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
               // Let the code generation of the expression which corresponds to this pattern
               // know that the bound id is at local idLocal.
               Map(id -> idLocal))
+
+            case LiteralPattern(lit) => 
+              (Comment(pat.toString) <:> 
+              cgExpr(lit) <:> // generate literal value
+              Eq,// compare I32 to match
+              Map())
             
-            case _ => ???
+            case CaseClassPattern(constr, patterns) => 
+              val caseClassCons = table.getConstructor(constr).get
+
+              val blockLabel = getFreshLabel("End_pattern")
+              val counterId = lh.getFreshLocal()
+              val startAdrId = lh.getFreshLocal()
+              val matchLenght = patterns.size
+
+              val startAdr = SetLocal(startAdrId) // Adt address
+              val counter = Const(0) <:> SetLocal(counterId)
+              
+              val block = Block(blockLabel)
+              val startCode = startAdr <:> counter 
+              val lastCheck = GetLocal(counterId) <:> Const(matchLenght*I32Size) <:> Eq
+              val (eqChecks, newIds) = 
+                patterns
+                .map(matchAndBind(_))
+                .foldLeft((startCode, Map[Identifier, Int]()))(((acc, newV) => {
+                  ( acc._1 <:>                                               //
+                    GetLocal(startAdrId) <:> GetLocal(counterId) <:> Add <:> // new adress to load the data and check equal
+                    Load  <:>                                               // load the value on the stack
+                    newV._1 <:>                                             // code to check subpattern
+                    Eqz <:> If_void <:> Br(blockLabel) <:>                  // match failed -> jump to end block                             
+                    Const(I32Size) <:> GetLocal(counterId) <:> Add <:> SetLocal(counterId) // update counter if sub-pattern match
+                    , acc._2 ++ newV._2
+                  )
+                
+                }))
+              
+              (eqChecks <:> block <:> lastCheck, newIds)
+
+
+                  
+              
+                
           }
           ???
 
-      
+
+          
       }
     }
 
