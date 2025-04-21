@@ -8,8 +8,8 @@ import amyc.utils.{Context, Pipeline}
 import wasm._
 import Instructions._
 import Utils._
-import scala.collection.immutable.Stream.Cons
-import amyc.ast.TreeModule.Expr
+
+
 
 val I32Size = 4
 
@@ -247,43 +247,51 @@ object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
               val blockLabel = getFreshLabel("End_pattern")
               val counterId = lh.getFreshLocal()
               val startAdrId = lh.getFreshLocal()
-              val matchLenght = patterns.size
+              val matchLenght = patterns.size + 1 // check Constr index + every field in the CaseClass
 
               val startAdr = SetLocal(startAdrId) // Adt address
               val counter = Const(0) <:> SetLocal(counterId)
-              
               val block = Block(blockLabel)
-              val startCode = startAdr <:> counter 
+
+              val startCode = startAdr <:> counter <:> block
               val lastCheck = GetLocal(counterId) <:> Const(matchLenght*I32Size) <:> Eq
               val (eqChecks, newIds) = 
                 patterns
                 .map(matchAndBind(_))
                 .foldLeft((startCode, Map[Identifier, Int]()))(((acc, newV) => {
                   ( acc._1 <:>                                               //
-                    GetLocal(startAdrId) <:> GetLocal(counterId) <:> Add <:> // new adress to load the data and check equal
+                    GetLocal(startAdrId) <:> GetLocal(counterId) <:> Add <:> // new adress to load the data and check equality
                     Load  <:>                                               // load the value on the stack
                     newV._1 <:>                                             // code to check subpattern
-                    Eqz <:> If_void <:> Br(blockLabel) <:>                  // match failed -> jump to end block                             
+                    Eqz <:> If_void <:> Br(blockLabel) <:> End <:>                // match failed -> jump to end block                             
                     Const(I32Size) <:> GetLocal(counterId) <:> Add <:> SetLocal(counterId) // update counter if sub-pattern match
                     , acc._2 ++ newV._2
                   )
                 
                 }))
               
-              (eqChecks <:> block <:> lastCheck, newIds)
+              (eqChecks <:> End <:> lastCheck, newIds)
 
-
-                  
-              
-                
           }
-          ???
 
+          val matchOnCode = cgExpr(scrut)
+          val matchOnValId = lh.getFreshLocal()
+          val startCode = matchOnCode <:> SetLocal(matchOnValId)
 
-          
+          def generateIfClause(l: List[((Code, Map[Identifier, Int]), Expr)]): Code = {
+            l match
+              case ((c, m), e) :: next => 
+                GetLocal(matchOnValId) <:> c <:> 
+                If_i32 <:> cgExpr(e)(locals++m, lh) <:> Else <:>
+                generateIfClause(next) <:> End
+
+              case Nil => Code(List(Const(0),Unreachable)) // make the program fail if no match succeed
+            
+          }
+          val caseList = cases.map(x => (matchAndBind(x.pat), x.expr))
+          startCode <:> generateIfClause(caseList)
       }
     }
-
 
 
     Module(
