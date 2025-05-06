@@ -65,6 +65,8 @@ trait TreeModule { self =>
   case class Sequence(e1: Expr, e2: Expr) extends Expr
   // Local variable definition
   case class Let(df: ParamDef, value: Expr, body: Expr) extends Expr
+  // Local changeable variable def 
+  case class Assign(df: ParamDef, value: Expr, body: Expr) extends Expr
   // If-then-else
   case class Ite(cond: Expr, thenn: Expr, elze: Expr) extends Expr
   // Pattern matching

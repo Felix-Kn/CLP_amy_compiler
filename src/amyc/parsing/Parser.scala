@@ -138,7 +138,7 @@ object Parser extends Pipeline[Iterator[Token], Program]
   // Stop the expr recursion when we hit a newVal definition
   // newVal will then create a new sequence with old-Context + newVal 
   lazy val expr: Syntax[Expr] = recursive { 
-    ((exprNoVal ~ opt(";" ~ expr))|| newVal).map{
+    ((exprNoVal ~ opt(";" ~ expr)) || newValOrVar).map{
 
       case toTest => toTest match
         // case Sequence of not newVal
@@ -151,9 +151,19 @@ object Parser extends Pipeline[Iterator[Token], Program]
     }
   }     
 
+  lazy val newValOrVar :  Syntax[Expr] = {
+    newVal | newVar
+  }
+
   lazy val newVal: Syntax[Expr] = {
     (kw("val") ~ parameter ~ "=" ~ exprNoVal ~ ";" ~ expr).map{
       case _ ~ param ~ _ ~ expr1 ~ _ ~ expr2 => Let(param, expr1, expr2) 
+    }
+  }
+
+  lazy val newVar: Syntax[Expr] = {
+     (kw("var") ~ parameter ~ "=" ~ exprNoVal ~ ";" ~ expr).map{
+      case _ ~ param ~ _ ~ expr1 ~ _ ~ expr2 => Assign(param, expr1, expr2) 
     }
   }
 
