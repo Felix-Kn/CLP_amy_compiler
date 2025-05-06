@@ -10,7 +10,6 @@ import Instructions._
 import Utils._
 
 
-
 val I32Size = 4
 
 // Generates WebAssembly code for an Amy program
@@ -169,23 +168,29 @@ object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
               case Some(value) => Comment(expr.toString) <:> value <:> Call(fullName(func.owner, qname))
             }
             case None => 
+
+              val startAdrId = lh.getFreshLocal()
+              val startAdr = GetGlobal(memoryBoundary) <:> SetLocal(startAdrId)
+
               val constructor = table.getConstructor(qname).get
               val objectCode = List(Code(List(Const(constructor.index)))) ++ args.map(cgExpr(_))
               val nbI32Towrite = objectCode.size
+             
+              
+
               val storedObject = for (code, index) <- objectCode.zipWithIndex
-                yield GetGlobal(memoryBoundary) <:> 
+                yield GetLocal(startAdrId) <:> 
                       Const(index*I32Size) <:>
                       Add <:> 
                       code <:>
                       Store
 
-              val newMemIndex = GetGlobal(memoryBoundary) <:> // return Address
-                                GetGlobal(memoryBoundary) <:>
+              val newMemIndex = GetLocal(startAdrId) <:>
                                 Const(nbI32Towrite*I32Size) <:> 
                                 Add <:> 
                                 SetGlobal(memoryBoundary)
 
-              Comment(expr.toString) <:> storedObject <:> newMemIndex
+              Comment(expr.toString) <:> startAdr <:> newMemIndex <:> storedObject <:> GetLocal(startAdrId)
           
           
         case Sequence(e1, e2) => 
@@ -245,51 +250,46 @@ object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
               val caseClassCons = table.getConstructor(constr).get
 
               val blockLabel = getFreshLabel("End_pattern")
-              val counterId = lh.getFreshLocal()
+              val isMatchId = lh.getFreshLocal()
               val startAdrId = lh.getFreshLocal()
               val matchLenght = patterns.size + 1 // check Constr index + every field in the CaseClass
 
               val startAdr = SetLocal(startAdrId) // Adt address
-              val counter = Const(0) <:> SetLocal(counterId)
-              val block = Block(blockLabel)
+              val isMatch = Const(1) <:> SetLocal(isMatchId)
+              val startCode = startAdr <:> isMatch <:> Block(blockLabel)
 
-              val startCode = startAdr <:> counter <:> block
-              val lastCheck = GetLocal(counterId) <:> Const(matchLenght*I32Size) <:> Eq
-              val (eqChecks, newIds) = 
-                patterns
-                .map(matchAndBind(_))
-                .foldLeft((startCode, Map[Identifier, Int]()))(((acc, newV) => {
-                  ( acc._1 <:>                                               //
-                    GetLocal(startAdrId) <:> GetLocal(counterId) <:> Add <:> // new adress to load the data and check equality
-                    Load  <:>                                               // load the value on the stack
-                    newV._1 <:>                                             // code to check subpattern
-                    Eqz <:> If_void <:> Br(blockLabel) <:> End <:>                // match failed -> jump to end block                             
-                    Const(I32Size) <:> GetLocal(counterId) <:> Add <:> SetLocal(counterId) // update counter if sub-pattern match
-                    , acc._2 ++ newV._2
-                  )
-                
-                }))
-              
-              (eqChecks <:> End <:> lastCheck, newIds)
-
+              val (eqChecks, newIds) = patterns.map(matchAndBind(_)).unzip
+              val loadAndCheck = (Code(List(Const(caseClassCons.index), Eq)) +:eqChecks)
+                .zipWithIndex
+                .map((checkCode, index) => 
+                  GetLocal(startAdrId) <:> Const(index*I32Size) <:> Add <:> 
+                  Load <:> 
+                  checkCode <:> 
+                  Eqz <:> If_void <:> Const(0) <:> SetLocal(isMatchId) <:> Br(blockLabel) <:> Else <:> End 
+                )
+              (startCode <:> loadAndCheck <:> End <:> GetLocal(isMatchId), newIds.fold(Map.empty[Identifier, Int])(_++_)) 
+  
           }
 
           val matchOnCode = cgExpr(scrut)
           val matchOnValId = lh.getFreshLocal()
-          val startCode = matchOnCode <:> SetLocal(matchOnValId)
+          val temp = lh.getFreshLocal() 
+
+          val matchBlockName = getFreshLabel("Pattern_Matched")
+          val BlockEnd = Block(matchBlockName)
+          val startCode = matchOnCode <:> SetLocal(matchOnValId) <:> BlockEnd
 
           def generateIfClause(l: List[((Code, Map[Identifier, Int]), Expr)]): Code = {
             l match
               case ((c, m), e) :: next => 
                 GetLocal(matchOnValId) <:> c <:> 
-                If_i32 <:> cgExpr(e)(locals++m, lh) <:> Else <:>
+                If_void <:> cgExpr(e)(locals++m, lh) <:> SetLocal(temp) <:> Br(matchBlockName) <:> Else <:>
                 generateIfClause(next) <:> End
 
-              case Nil => Code(List(Const(0),Unreachable)) // make the program fail if no match succeed
-            
+              case Nil => Code(List(Const(0), SetLocal(temp), Unreachable)) // make the program fail if no match succeed
           }
           val caseList = cases.map(x => (matchAndBind(x.pat), x.expr))
-          startCode <:> generateIfClause(caseList)
+          startCode <:> generateIfClause(caseList) <:> End <:> GetLocal(temp)
       }
     }
 
