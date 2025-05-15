@@ -23,6 +23,7 @@ object Parser extends Pipeline[Iterator[Token], Program]
   override def getKind(token: Token): TokenKind = TokenKind.of(token)
 
   val eof: Syntax[Token] = elem(EOFKind)
+  val nullE = UnitLiteral()
   def op(string: String): Syntax[Token] = elem(OperatorKind(string))
   def kw(string: String): Syntax[Token] = elem(KeywordKind(string))
 
@@ -39,7 +40,7 @@ object Parser extends Pipeline[Iterator[Token], Program]
       else 
         throw new AmycFatalError("Begin and end module names do not match: " + id + " and " + id1)
   }
-
+    
 
   // An identifier.
   val identifier: Syntax[String] = accept(IdentifierKind){
@@ -71,8 +72,7 @@ object Parser extends Pipeline[Iterator[Token], Program]
         CaseClassDef(identifier, fields.map(_.tt ), parent).setPos(kw)}
     
     
-    
-  
+ 
 
   // A list of parameter definitions.
   lazy val parameters: Syntax[List[ParamDef]] = repsep(parameter, ",").map(_.toList)
@@ -125,20 +125,13 @@ object Parser extends Pipeline[Iterator[Token], Program]
         case Match(_, cases) => Match(leftExpr, cases)
     })
 
-  def foldSequences = (seqList :Seq[Expr]) => {
-    assert(!seqList.isEmpty)
-    val newList = seqList.init
-    val lastElem = seqList.last
-    newList.foldRight(lastElem)((leftExpr, rightExpr) => Sequence(leftExpr, rightExpr))
-  }
-    
   // An expression.
   // HINT: You can use `operators` to take care of associativity and precedence
 
   // Stop the expr recursion when we hit a newVal definition
   // newVal will then create a new sequence with old-Context + newVal 
   lazy val expr: Syntax[Expr] = recursive { 
-    ((exprNoVal ~ opt(";" ~ expr)) || newValOrVar).map{
+    (((exprNoOp | idStart) ~ opt(";" ~ expr)) || newValOrVar).map{
 
       case toTest => toTest match
         // case Sequence of not newVal
@@ -151,61 +144,257 @@ object Parser extends Pipeline[Iterator[Token], Program]
     }
   }     
 
+
   lazy val newValOrVar :  Syntax[Expr] = {
     newVal | newVar
   }
 
   lazy val newVal: Syntax[Expr] = {
-    (kw("val") ~ parameter ~ "=" ~ exprNoVal ~ ";" ~ expr).map{
+    (kw("val") ~ parameter ~ "=" ~ exprNoValNoReAssign ~ ";" ~ expr).map{
       case _ ~ param ~ _ ~ expr1 ~ _ ~ expr2 => Let(param, expr1, expr2) 
     }
   }
 
   lazy val newVar: Syntax[Expr] = {
-     (kw("var") ~ parameter ~ "=" ~ exprNoVal ~ ";" ~ expr).map{
+     (kw("var") ~ parameter ~ "=" ~ exprNoValNoReAssign ~ ";" ~ expr).map{
       case _ ~ param ~ _ ~ expr1 ~ _ ~ expr2 => Assign(param, expr1, expr2) 
     }
   }
 
+  lazy val amyWhile: Syntax[Expr] = 
+    (kw("while") ~ "(" ~ expr ~")" ~ "{" ~ expr ~ "}").map{
+      case _ ~ _ ~ cond ~ _ ~ _ ~ body ~ _  => While(cond, body)
+    }
+  
 
   // first expr of a val can not contain a val
-  lazy val exprNoVal: Syntax[Expr] =
+  lazy val exprNoValNoReAssign: Syntax[Expr] = recursive{
     (N ~ opt(many1(matchs))).map{
       case firstExpre ~ optMatchs => 
         optMatchs match
         case None => firstExpre
         case Some(manyMatch) => foldMatchs(firstExpre)(manyMatch)           
     }
+  }
+
+  lazy val exprNoOp: Syntax[Expr] = recursive{
+    (noOp ~ opt(many1(matchs))).map{
+      case firstExpre ~ optMatchs => 
+        optMatchs match
+        case None => firstExpre
+        case Some(manyMatch) => foldMatchs(firstExpre)(manyMatch)           
+    }
+  }
   
+  lazy val noOp: Syntax[Expr] = 
+    ifThenElse | amyWhile
+
   lazy val N: Syntax[Expr] = 
-    operators | ifThenElse 
-  
+    operators |  ifThenElse | amyWhile 
+
+
+  // lazy val reAssign: Syntax[Expr] = 
+  //   (elem(ReassignKind) ~ N ~ opt(many1(matchs))).map{
+  //     case nameToken ~ firstExpr ~ optMatchs => 
+  //       val name = nameToken match {case ReassignToken(name) => name}
+  //       optMatchs match
+  //         case None => firstExpr
+  //         case Some(manyMatch) => foldMatchs(firstExpr)(manyMatch)      
+  //   }
+
   lazy val matchs: Syntax[Expr] = 
     (kw("match") ~ "{" ~ many1(matchCase) ~ "}").map{ 
       case _ ~ _ ~ caseSeq ~ _ => 
         Match(UnitLiteral(), caseSeq.toList)
     }
   
-    
-  lazy val unaryExp: Syntax[Expr] = 
-    unaryOp | simpleExpr
-  
-  lazy val unaryOp: Syntax[Expr] = 
-    unaryNeg | unaryNot
-    
-  lazy val unaryNot: Syntax[Expr] = 
-    (op("!") ~ simpleExpr).map{
-      case _ ~ notExpr => Not(notExpr) 
+
+
+  lazy val dotId: Syntax[String] =
+    ("." ~ identifier).map{
+      case _ ~ id => id
     }
+
+  lazy val followCall: Syntax[Seq[Expr]] = 
+    ("(" ~ repsep(expr, ",") ~ ")").map{
+      case _ ~ exprSeq ~_ => exprSeq
+    }
+
   
-  lazy val unaryNeg: Syntax[Expr] = 
-    (op("-") ~ simpleExpr).map{
-      case _ ~ negExpr => Neg(negExpr)
+  lazy val isCall: Syntax[Expr] = 
+      (dotId ~ followCall).map{
+        case id ~ exprSeq => Call(QualifiedName(None, id), exprSeq.toList)
+      }| followCall.map{
+        case exprSeq => Call(QualifiedName(None, ""), exprSeq.toList)
+      }
+    
+  lazy val variableOrCall: Syntax[Expr] = 
+    (identifier ~ opt(isCall)).map{
+      case id ~ optCallModify => 
+        optCallModify match
+          case None => Variable(id)
+          case Some(callOrModify) => 
+            callOrModify match
+              case Call(QualifiedName(None, tempId), args) => 
+                    if(tempId.isEmpty()) Call(QualifiedName(None, id), args) else 
+                      Call(QualifiedName(Some(id), tempId), args)
+    } 
+  
+  // lazy val operators: Syntax[Expr] = parseOr
+  // lazy val operators: Syntax[Expr] = 
+  //   parseOr
+
+
+  
+  // lazy val parseOr: Syntax[Expr] =
+  //   chainLeft(parseAnd, op("||"))
+
+  // lazy val parseAnd: Syntax[Expr] =
+  //   chainLeft(parseEquals, op("&&"))
+
+  // lazy val parseEquals: Syntax[Expr] =
+  //   chainLeft(parseRelational, op("=="))
+
+  // lazy val parseRelational: Syntax[Expr] =
+  //   chainLeft(parseAddSub, (op("<=") | op("<")))
+
+  // lazy val parseAddSub: Syntax[Expr] =
+  //   chainLeft(parseMulDivMod, (op("+") | op("-") | op("++")))
+
+  // lazy val parseMulDivMod: Syntax[Expr] =
+  //   chainLeft(noReassignOp, (op("*") | op("/") | op("%")))
+
+  // lazy val noReassignOp: Syntax[Expr] = 
+  //     unaryOp | simpleExprNoCall | variableOrCall
+  
+  // lazy val assignOrOperator: Syntax[Expr] = 
+  //   unaryOp | simpleExprNoCall | variableOrCall
+  
+  
+  
+  lazy val unaryExpr: Syntax[Expr] = 
+      ((op("!")||op("-")) ~ simpleExpr).map{
+        case op ~ nextExpr => 
+          op match 
+            case Left(_) => Not(nextExpr) 
+            case Right(_) => Neg(nextExpr)
+      } | simpleExpr
+     
+
+    
+
+  
+  // def chainLeft(base: Syntax[Expr], op: Syntax[Token], right: Option[Syntax[Expr]] = None): Syntax[Expr] = {
+  //   recursive {
+  //     (base ~ many(op ~ right.getOrElse(base))).map {
+  //       case lhs ~ rest =>
+  //         rest.foldLeft(lhs) {
+  //           case (acc, OperatorToken(opToken) ~ rhs) => 
+  //             operatorTranslation(acc, opToken, rhs)
+  //         }
+  //     }
+  //   }
+  // }
+  lazy val singleOp:Syntax[Token ~ Expr] = 
+    (oneOf(op("+"),op("-"),op("*"), op("/"),op("%"),op("<"),op("<="), op("=="), op("&&"), op("||"), op("++")) ~ operators)
+
+  lazy val isCallWithOp: Syntax[Expr ~ Option[(Token ~ Expr)]] = 
+    isCall ~ opt(singleOp)
+
+  lazy val isNewAssign: Syntax[Expr] = 
+    ("=" ~ N).map{
+      case _ ~ newExpr => reAssign("", newExpr)
+    }
+  lazy val elseSimpleExpr: Syntax[Expr ~ Option[(Token ~ Expr)]] = 
+    (simpleExprNoId ~ opt(singleOp))
+    
+  def rewireOperator(lhs: Expr, op: Expr, rhs: Expr): Expr = {
+    val opLevel = getOpLevel(op)
+    val rhsLevel = getOpLevel(rhs)
+    // base case
+    if(opLevel <= rhsLevel){
+      buildOpFromOp(lhs, op, rhs)
+    }else{
+      rhs match
+        case Or(newLeft, right) => Or(rewireOperator(lhs, op, newLeft), right)
+        case And(newLeft, right) => And(rewireOperator(lhs, op, newLeft), right)
+        case Equals(newLeft, right) => Equals(rewireOperator(lhs, op, newLeft), right)
+        case LessEquals(newLeft, right) => LessEquals(rewireOperator(lhs, op, newLeft), right)
+        case LessThan(newLeft, right) => LessThan(rewireOperator(lhs, op, newLeft), right)
+        case Plus(newLeft, right) => Plus(rewireOperator(lhs, op, newLeft), right)
+        case Minus(newLeft, right) => Minus(rewireOperator(lhs, op, newLeft), right)
+        case Times(newLeft, right) => Times(rewireOperator(lhs, op, newLeft), right)
+        case Concat(newLeft, right) => Concat(rewireOperator(lhs, op, newLeft), right)
+        case Mod(newLeft, right) => Mod(rewireOperator(lhs, op, newLeft), right)
+        case Div(newLeft, right) => Div(rewireOperator(lhs, op, newLeft), right)
     }
     
     
+    
+  }
+  def buildOpFromOp(newLeft:Expr, op:Expr, right: Expr): Expr = {
+    op match
+      case Or(_,_) => Or(newLeft, right)
+      case And(_,_) => And(newLeft, right)
+      case Equals(_,_) => Equals(newLeft, right)
+      case LessEquals(_,_) => LessEquals(newLeft, right)
+      case LessThan(_,_) => LessThan(newLeft, right)
+      case Plus(_,_) => Plus(newLeft, right)
+      case Minus(_,_) => Minus(newLeft, right)
+      case Times(_,_) => Times(newLeft, right)
+      case Concat(_,_) => Concat(newLeft, right)
+      case Mod(_,_) => Mod(newLeft, right)
+      case Div(_,_) => Div(newLeft, right)
+      case _ => throw new AmycFatalError(s"Build from op failed match => ${op}")
+  }
+  
+
+  def getOpLevel(op:Expr): Int = {
+    op match
+      case a@Or(_,_) => 0
+      case a@And(_,_) => 1
+      case a@Equals(_,_) => 2 
+      case LessEquals(_,_) | LessThan(_,_) => 3
+      case Plus(_,_) | Minus(_,_) | Concat(_,_) => 4 
+      case Mod(_,_) | Times(_,_) | Div(_,_) => 5
+      case IntLiteral(_) | StringLiteral(_) | BooleanLiteral(_) | UnitLiteral()  => 6
+      case Call(_,_) | Variable(_) | Error(_) => 6
+      case _ => throw new AmycFatalError(s"get operator level failed match => ${op}")
+  } 
+
+
+  lazy val idStart: Syntax[Expr] = 
+    (identifier ~ opt(singleOp || isCallWithOp || isNewAssign)).map{
+      case id1 ~ optWtf => 
+        optWtf match
+          case None => Variable(id1)
+          case Some(extra) => 
+            extra match
+              case Left(moreValue) => 
+                moreValue match
+                  case Left(OperatorToken(name) ~ rhs) => 
+                    rewireOperator(Variable(id1), operatorTranslation(nullE, name, nullE), rhs)
+
+                  case Right(callVals ~ optOp) =>
+                    optOp match
+                      case None => ??? // redo call allone
+                      case Some((OperatorToken(name) ~ rhs)) =>
+                        rewireOperator(Variable(id1), operatorTranslation(nullE, name, nullE), rhs) /// redo Call folow op
+
+                
+              case Right(assign) =>
+                assign match {case reAssign(_, newValue) => reAssign(id1, newValue)}
+    } | elseSimpleExpr.map{
+      case lhs ~ optOp => 
+        optOp match
+          case None => lhs
+          case Some((OperatorToken(name) ~ rhs)) =>
+            rewireOperator(lhs, operatorTranslation(nullE, name, nullE), rhs)
+    }
+
+      
   lazy val operators: Syntax[Expr] = 
-    operators(unaryExp)(
+    operators(unaryExpr)(
       Level(op("*") | op("/") | op("%"),  LeftAssociative),
       Level(op("+") | op("-") | op("++"), LeftAssociative),
       Level(op("<=") | op("<"), LeftAssociative),
@@ -237,6 +426,8 @@ object Parser extends Pipeline[Iterator[Token], Program]
     (kw("if") ~ "(" ~ expr ~ ")" ~ "{" ~ expr ~ "}" ~ kw("else") ~ "{" ~ expr ~ "}").map{
       case _ ~ _ ~ cond ~ _ ~ _ ~ thenn ~ _ ~ _ ~ _ ~ elze ~ _ => Ite(cond, thenn, elze)
     }
+  
+  
     
 
   // A literal expression.
@@ -283,39 +474,73 @@ object Parser extends Pipeline[Iterator[Token], Program]
 
 
 
+
+  
   lazy val simpleExpr: Syntax[Expr] = 
     literal.up[Expr] | variableOrCall | error | unitOrParenthese 
+
+  lazy val simpleExprNoId: Syntax[Expr] =
+    literal.up[Expr] | error | unitOrParenthese 
   
 
-  lazy val dotId: Syntax[String] =
-    ("." ~ identifier).map{
-      case _ ~ id => id
-    }
+  // lazy val unaryExpNoAssign: Syntax[Expr] = 
+  //   simpleExprNoAssign | unaryOpNoAssign
 
-  lazy val followCall: Syntax[Seq[Expr]] = 
-    ("(" ~ repsep(expr, ",") ~ ")").map{
-      case _ ~ exprSeq ~_ => exprSeq
-    }
+  // lazy val unaryOpNoAssign: Syntax[Expr] = 
+  //   ((op("!")||op("-")) ~ simpleExprNoAssign).map{
+  //     case op ~ nextExpr => 
+  //       op match 
+  //         case Left(_) => Not(nextExpr) 
+  //         case Right(_) => Neg(nextExpr)
+  //   }
 
-  lazy val isCall: Syntax[Expr] = 
-    (dotId ~ followCall).map{
-      case id ~ exprSeq => Call(QualifiedName(None, id), exprSeq.toList)
-    }| 
-    followCall.map{
-      case exprSeq => Call(QualifiedName(None, ""), exprSeq.toList)
-    }
+  // lazy val exprNoValNoAssign: Syntax[Expr] = 
+  //   (NNoAssign ~ opt(many1(matchs))).map{
+  //     case firstExpre ~ optMatchs => 
+  //       optMatchs match
+  //       case None => firstExpre
+  //       case Some(manyMatch) => foldMatchs(firstExpre)(manyMatch)           
+  //   }
+  
+  // lazy val NNoAssign: Syntax[Expr] = 
+  //   operatorsNoAssign | ifThenElse | amyWhile 
 
-  lazy val variableOrCall: Syntax[Expr] = 
-    (identifier ~ opt(isCall)).map{
-      case id ~ optCall => 
-        optCall match
-          case None => Variable(id)
-          case Some(call) => 
-            call match
-              case Call(QualifiedName(None, tempId), args) => 
-                if(tempId.isEmpty()) Call(QualifiedName(None, id), args) else 
-                  Call(QualifiedName(Some(id), tempId), args)
-    } 
+  // lazy val operatorsNoAssign: Syntax[Expr] = 
+  //   operators(unaryExpNoAssign)(
+  //     Level(op("*") | op("/") | op("%"),  LeftAssociative),
+  //     Level(op("+") | op("-") | op("++"), LeftAssociative),
+  //     Level(op("<=") | op("<"), LeftAssociative),
+  //     Level(op("=="), LeftAssociative),
+  //     Level(op("&&"), LeftAssociative),
+  //     Level(op("||"), LeftAssociative)
+  //     )((left, op, right) =>
+  //       (op: @unchecked )match
+  //         case OperatorToken(operator) => operatorTranslation(left, operator, right).setPos(op))
+
+  // lazy val simpleExprNoAssign: Syntax[Expr] = 
+  //   literal.up[Expr] | variableOrCall | error | unitOrParenthese 
+
+  // lazy val isCallOrReassign: Syntax[Expr] = 
+  //   isCall | ("=" ~ exprNoValNoAssign).map{
+  //     case _ ~ newValue => reAssign("", newValue)
+  //   }
+
+  // lazy val variableOrCallOrReassign: Syntax[Expr] = 
+  //   (identifier ~ opt(isCallOrReassign)).map{
+  //     case id ~ optCallModify => 
+  //       optCallModify match
+  //         case None => Variable(id)
+  //         case Some(callOrModify) => 
+  //           callOrModify match
+  //             case Call(QualifiedName(None, tempId), args) => 
+  //                   if(tempId.isEmpty()) Call(QualifiedName(None, id), args) else 
+  //                     Call(QualifiedName(Some(id), tempId), args)
+  //             case reAssign(_, newValue) => reAssign(id, newValue) 
+                  
+  //   } 
+    
+
+
 
   // avoid first first conflict on (
   lazy val unitOrParenthese: Syntax[Expr] =
@@ -340,7 +565,7 @@ object Parser extends Pipeline[Iterator[Token], Program]
     } else {
       // Set `showTrails` to true to make Scallion generate some counterexamples for you.
       // Depending on your grammar, this may be very slow.
-      val showTrails = false
+      val showTrails = true
       debug(program, showTrails)
       false
     }

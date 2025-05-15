@@ -69,6 +69,11 @@ trait TreeModule { self =>
   case class Assign(df: ParamDef, value: Expr, body: Expr) extends Expr
   // If-then-else
   case class Ite(cond: Expr, thenn: Expr, elze: Expr) extends Expr
+  // while loops
+  case class While(cond:Expr, body:Expr) extends Expr
+
+  case class reAssign(name: Name, newValue: Expr) extends Expr
+
   // Pattern matching
   case class Match(scrut: Expr, cases: List[MatchCase]) extends Expr {
     require(cases.nonEmpty)

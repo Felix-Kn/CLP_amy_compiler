@@ -12,6 +12,7 @@ sealed trait Token extends Positioned with Product {
 object Tokens {
   final case class KeywordToken(value: String) extends Token    // e.g. keyword "if"
   final case class IdentifierToken(name: String) extends Token  // e.g. variable name "x" 
+  final case class ReassignToken(name:String) extends Token
   final case class PrimTypeToken(value: String) extends Token   // e.g. primitive type "Int"
   final case class IntLitToken(value: Int) extends Token        // e.g. integer literal "123"
   final case class StringLitToken(value: String) extends Token
