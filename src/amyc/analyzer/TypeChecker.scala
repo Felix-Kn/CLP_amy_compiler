@@ -98,10 +98,17 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
         case Let(df: ParamDef, value: Expr, body: Expr) => 
           genConstraints(value, df.tt.tpe) ++ genConstraints(body, expected)(env.updated(df.name, df.tt.tpe))
 
+        case Assign(df, value, body) => 
+          genConstraints(value, df.tt.tpe) ++ genConstraints(body, expected)(env.updated(df.name, df.tt.tpe))
         
-          // HINT: Take care to implement the specified Amy semantics
-          // TODO
+        case t@reAssign(name, newValue) => 
+
+          val varType = env.get(name).getOrElse(fatal("name analyzer failed to detect reassignement before declaration !", t))
+          genConstraints(newValue, varType) ++ topLevelConstraint(UnitType)
         
+        case While(cond, body) => 
+          val bodyConstraint = TypeVariable.fresh()
+          genConstraints(cond, BooleanType) ++ genConstraints(body, bodyConstraint) ++ topLevelConstraint(UnitType) 
             
         case Match(scrut, cases) =>
           // Returns additional constraints from within the pattern with all bindings
@@ -140,7 +147,6 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
           genConstraints(scrut, st) ++
           cases.flatMap(cse => handleCase(cse, st))
 
-        case ParenthesizedExpr(e) => genConstraints(e, expected) 
       }
     }
 

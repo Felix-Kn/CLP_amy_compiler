@@ -216,7 +216,33 @@ object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
           SetLocal(newId) <:> 
           cgExpr(body)(locals+(df.name-> newId), lh)
 
+        case Assign(df, value, body) => 
+            val newId = lh.getFreshLocal()
+            Comment(expr.toString) <:>
+            cgExpr(value) <:>
+            SetLocal(newId) <:> 
+            cgExpr(body)(locals+(df.name-> newId), lh)
+        
+        case reAssign(name, newValue) => 
+          Comment(expr.toString) <:>
+          cgExpr(newValue) <:>
+          SetLocal(locals.get(name).get) <:> 
+          Const(0)
 
+        case While(cond, body) =>
+          val loopName = getFreshLabel("Start_while")
+          val blockName = getFreshLabel("End_while")
+          Comment(expr.toString) <:>
+          Block(blockName) <:> 
+            Loop(loopName) <:> 
+              cgExpr(cond) <:>
+              Eqz <:>
+              If_void <:> Br(blockName) <:> End <:>
+              cgExpr(body) <:> Drop <:> Br(loopName) <:>
+            End <:>
+          End <:> Const(0)
+            
+          
 
         case Match(scrut, cases) =>
             

@@ -118,12 +118,12 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
         sym,
         newParams,
         S.TypeTree(sig.retType).setPos(retType),
-        transformExpr(body)(module, (paramsMap, Map()))
+        transformExpr(body)(module, (paramsMap, Map()), Set())
       ).setPos(fd)
     }
 
     def transformExpr(expr: N.Expr)
-                     (implicit module: String, names: (Map[String, Identifier], Map[String, Identifier])): S.Expr = {
+                     (implicit module: String, names: (Map[String, Identifier], Map[String, Identifier]), isModifiable: Set[Identifier]): S.Expr = {
       val (params, locals) = names
       val res = expr match {
         case N.Variable(name) =>
@@ -180,6 +180,7 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
           }
         case N.Sequence(e1, e2) =>
           S.Sequence(transformExpr(e1), transformExpr(e2))
+
         case N.Let(vd, value, body) =>
           if (locals.contains(vd.name)) {
             fatal(s"Variable redefinition: ${vd.name}", vd)
@@ -194,6 +195,36 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
             transformExpr(value),
             transformExpr(body)(module, (params, locals + (vd.name -> sym)))
           )
+        
+        case N.Assign(vd, value, body) =>
+            if (locals.contains(vd.name)) {
+              fatal(s"Variable redefinition: ${vd.name}", vd)
+            }
+            if (params.contains(vd.name)) {
+              warning(s"Local variable ${vd.name} shadows function parameter", vd)
+            }
+            val sym = Identifier.fresh(vd.name)
+            val tpe = transformType(vd.tt, module)
+            
+            S.Assign(
+              S.ParamDef(sym, S.TypeTree(tpe)).setPos(vd),
+              transformExpr(value),
+              transformExpr(body)(module, (params, locals + (vd.name -> sym)), isModifiable + sym)
+            )
+
+        case N.reAssign(name, newValue) => 
+          val id = locals.getOrElse(name, fatal(s"Variable $name not found", expr))
+          if(!isModifiable.contains(id)) fatal(s"Variable $name is not modifiable", expr) 
+          S.reAssign(
+            id, 
+            transformExpr(newValue)
+          )
+        case N.While(condition, body) => 
+          S.While(transformExpr(condition), transformExpr(body))
+        
+        case N.ParenthesizedExpr(e) => 
+          transformExpr(e)
+          
         case N.Ite(cond, thenn, elze) =>
           S.Ite(transformExpr(cond), transformExpr(thenn), transformExpr(elze))
         case N.Match(scrut, cases) =>
@@ -255,7 +286,7 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
         S.ModuleDef(
           table.getModule(name).get,
           defs map (transformDef(_, name)),
-          optExpr map (transformExpr(_)(name, (Map(), Map())))
+          optExpr map (transformExpr(_)(name, (Map(), Map()), Set()))
         ).setPos(mod)
       }
     ).setPos(p)

@@ -43,7 +43,6 @@ class SymbolTable {
   private val constructors = HashMap[Identifier, ConstrSig]()
 
   private val typesToConstructors = HashMap[Identifier, List[Identifier]]()
-
   private val constrIndexes = new UniqueCounter[Identifier]
 
   def addModule(name: String) = {
