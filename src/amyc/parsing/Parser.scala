@@ -11,6 +11,7 @@ import TokenKinds._
 import scallion._
 
 
+
 // The parser for Amy
 object Parser extends Pipeline[Iterator[Token], Program]
                  with Parsers {
@@ -302,20 +303,37 @@ object Parser extends Pipeline[Iterator[Token], Program]
     isCall ~ opt(singleOp)
 
   lazy val isNewAssign: Syntax[Expr] = 
-    ("=" ~ N).map{
-      case _ ~ newExpr => reAssign("", newExpr)
+    ("=" ~ N ).map{ case _ ~ newExpr => reAssign("", newExpr)}
+
+  lazy val elseSimpleExpr: Syntax[Expr] = 
+    (simpleExprNoId ~ opt(singleOp) ~ opt(many1(matchs))).map{
+      case lhs ~ optOp ~ optMatchs => 
+        (optOp: @unchecked) match
+          case None => applyMatch(lhs, optMatchs)
+          case Some((OperatorToken(name) ~ rhs)) =>
+            applyMatch(rewireOperator(lhs, operatorTranslation(nullE, name, nullE), rhs), optMatchs)
     }
-  lazy val elseSimpleExpr: Syntax[Expr ~ Option[(Token ~ Expr)]] = 
-    (simpleExprNoId ~ opt(singleOp))
+  
+  lazy val unaryOp: Syntax[Expr] = 
+    ((op("!") | op("-")) ~ simpleExpr ~ opt(singleOp) ~ opt(many1(matchs))).map{
+      case OperatorToken(name) ~ folowExpr ~ optOp ~ optMatchs => 
+        val leftVal = 
+          name match
+            case "!" => Not(folowExpr)
+            case "-" => Neg(folowExpr)
+        optOp match
+          case None => applyMatch(leftVal, optMatchs)
+          case Some(OperatorToken(name) ~ folowOp) => applyMatch(rewireOperator(leftVal, operatorTranslation(nullE, name, nullE), folowOp), optMatchs)
+    }
     
   def rewireOperator(lhs: Expr, op: Expr, rhs: Expr): Expr = {
     val opLevel = getOpLevel(op)
     val rhsLevel = getOpLevel(rhs)
     // base case
-    if(opLevel <= rhsLevel){
+    if(opLevel < rhsLevel){
       buildOpFromOp(lhs, op, rhs)
     }else{
-      rhs match
+      (rhs: @unchecked) match
         case Or(newLeft, right) => Or(rewireOperator(lhs, op, newLeft), right)
         case And(newLeft, right) => And(rewireOperator(lhs, op, newLeft), right)
         case Equals(newLeft, right) => Equals(rewireOperator(lhs, op, newLeft), right)
@@ -328,12 +346,10 @@ object Parser extends Pipeline[Iterator[Token], Program]
         case Mod(newLeft, right) => Mod(rewireOperator(lhs, op, newLeft), right)
         case Div(newLeft, right) => Div(rewireOperator(lhs, op, newLeft), right)
     }
-    
-    
-    
   }
+
   def buildOpFromOp(newLeft:Expr, op:Expr, right: Expr): Expr = {
-    op match
+    (op: @unchecked) match
       case Or(_,_) => Or(newLeft, right)
       case And(_,_) => And(newLeft, right)
       case Equals(_,_) => Equals(newLeft, right)
@@ -350,7 +366,7 @@ object Parser extends Pipeline[Iterator[Token], Program]
   
 
   def getOpLevel(op:Expr): Int = {
-    op match
+    (op: @unchecked) match
       case a@Or(_,_) => 0
       case a@And(_,_) => 1
       case a@Equals(_,_) => 2 
@@ -358,40 +374,47 @@ object Parser extends Pipeline[Iterator[Token], Program]
       case Plus(_,_) | Minus(_,_) | Concat(_,_) => 4 
       case Mod(_,_) | Times(_,_) | Div(_,_) => 5
       case IntLiteral(_) | StringLiteral(_) | BooleanLiteral(_) | UnitLiteral()  => 6
-      case Call(_,_) | Variable(_) | Error(_) => 6
+      case Call(_,_) | Variable(_) | Error(_) | Not(_) | Neg(_) | ParenthesizedExpr(_) => 6
       case _ => throw new AmycFatalError(s"get operator level failed match => ${op}")
   } 
 
+  def applyMatch(v:Expr, optMatchs:Option[Seq[Expr]]): Expr = {
+    optMatchs match
+      case None => v
+      case Some(matches) => foldMatchs(v)(matches)
+  }
 
   lazy val idStart: Syntax[Expr] = 
-    (identifier ~ opt(singleOp || isCallWithOp || isNewAssign)).map{
-      case id1 ~ optWtf => 
+    (identifier ~ opt(singleOp || isCallWithOp || isNewAssign) ~ opt(many1(matchs))).map{
+      case id1 ~ optWtf ~ optMatchs => 
         optWtf match
-          case None => Variable(id1)
+          case None => applyMatch(Variable(id1), optMatchs)
           case Some(extra) => 
-            extra match
+            (extra: @unchecked) match
               case Left(moreValue) => 
-                moreValue match
+                (moreValue: @unchecked) match
                   case Left(OperatorToken(name) ~ rhs) => 
-                    rewireOperator(Variable(id1), operatorTranslation(nullE, name, nullE), rhs)
+                    applyMatch(rewireOperator(Variable(id1), operatorTranslation(nullE, name, nullE), rhs), optMatchs)
 
                   case Right(callVals ~ optOp) =>
-                    optOp match
-                      case None => ??? // redo call allone
+                    val updatedCall = callVals match
+                      case Call(QualifiedName(None, tempId), args) => 
+                        if(tempId.isEmpty()) Call(QualifiedName(None, id1), args) else 
+                          Call(QualifiedName(Some(id1), tempId), args)
+                    applyMatch(updatedCall, optMatchs)
+                      
+                    
+                    (optOp: @unchecked) match
+                      case None => applyMatch(updatedCall, optMatchs)
                       case Some((OperatorToken(name) ~ rhs)) =>
-                        rewireOperator(Variable(id1), operatorTranslation(nullE, name, nullE), rhs) /// redo Call folow op
+                        applyMatch(rewireOperator(updatedCall, operatorTranslation(nullE, name, nullE), rhs), optMatchs) 
 
-                
               case Right(assign) =>
-                assign match {case reAssign(_, newValue) => reAssign(id1, newValue)}
-    } | elseSimpleExpr.map{
-      case lhs ~ optOp => 
-        optOp match
-          case None => lhs
-          case Some((OperatorToken(name) ~ rhs)) =>
-            rewireOperator(lhs, operatorTranslation(nullE, name, nullE), rhs)
-    }
+                assign match {case reAssign(_, newValue) => reAssign(id1, applyMatch(newValue, optMatchs))}
 
+    } | elseSimpleExpr | unaryOp
+
+  
       
   lazy val operators: Syntax[Expr] = 
     operators(unaryExpr)(
@@ -547,7 +570,7 @@ object Parser extends Pipeline[Iterator[Token], Program]
     ("(" ~ opt(expr) ~ ")").map{
       case tk ~ optExpr ~ _ => optExpr match
         case None => UnitLiteral().setPos(tk)
-        case Some(new_expr) => new_expr.setPos(tk)
+        case Some(new_expr) => ParenthesizedExpr(new_expr).setPos(tk)
     }
 
   lazy val error: Syntax[Expr] = 
@@ -565,7 +588,7 @@ object Parser extends Pipeline[Iterator[Token], Program]
     } else {
       // Set `showTrails` to true to make Scallion generate some counterexamples for you.
       // Depending on your grammar, this may be very slow.
-      val showTrails = true
+      val showTrails = false
       debug(program, showTrails)
       false
     }

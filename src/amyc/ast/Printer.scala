@@ -158,7 +158,7 @@ trait Printer {
           case UnitType => "Unit"
           case ClassType(name) => name
         }
-
+      case ParenthesizedExpr(e) => rec(e)
     }
 
     rec(t).print

@@ -140,8 +140,7 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
           genConstraints(scrut, st) ++
           cases.flatMap(cse => handleCase(cse, st))
 
-        
-          // TODO: Implement the remaining cases
+        case ParenthesizedExpr(e) => genConstraints(e, expected) 
       }
     }
 

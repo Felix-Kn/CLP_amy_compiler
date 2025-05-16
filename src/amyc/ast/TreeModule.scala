@@ -58,6 +58,7 @@ trait TreeModule { self =>
   // Unary operators
   case class Not(e: Expr) extends Expr
   case class Neg(e: Expr) extends Expr
+  case class ParenthesizedExpr(e: Expr) extends Expr
 
   // Function/constructor call
   case class Call(qname: QualifiedName, args: List[Expr]) extends Expr
