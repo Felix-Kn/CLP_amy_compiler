@@ -69,7 +69,7 @@ object AmyLexer extends Pipeline[List[File], Iterator[Token]]
     word("abstract") | word("case") | word("class") |
     word("def") | word("else") | word("extends") |
     word("if") | word("while")| word("match") | word("object") |
-    word("val")| word("var") | word("error") | word("_") | word("end")
+    word("val")| word("var") | word("error") | word("_") | word("end") | word("new")
       |> { (cs, range) => KeywordToken(cs.mkString).setPos(range._1) },
 
     // Primitive type names,

@@ -151,7 +151,7 @@ object Parser extends Pipeline[Iterator[Token], Program]
         case Left(notVal1 ~ optNextExpr) => 
           optNextExpr match
             case None => notVal1
-            case Some(_ ~ nextExpr) => Sequence(notVal1, nextExpr)
+            case Some(tk ~ nextExpr) => Sequence(notVal1, nextExpr).setPos(tk)
           
         case Right(isVal1) => isVal1
     }
@@ -164,19 +164,19 @@ object Parser extends Pipeline[Iterator[Token], Program]
 
   lazy val newVal: Syntax[Expr] = {
     (kw("val") ~ parameter ~ "=" ~ exprNoValNoReAssign ~ ";" ~ expr).map{
-      case _ ~ param ~ _ ~ expr1 ~ _ ~ expr2 => Let(param, expr1, expr2) 
+      case tk ~ param ~ _ ~ expr1 ~ _ ~ expr2 => Let(param, expr1, expr2).setPos(tk)
     }
   }
 
   lazy val newVar: Syntax[Expr] = {
      (kw("var") ~ parameter ~ "=" ~ exprNoValNoReAssign ~ ";" ~ expr).map{
-      case _ ~ param ~ _ ~ expr1 ~ _ ~ expr2 => Assign(param, expr1, expr2) 
+      case tk ~ param ~ _ ~ expr1 ~ _ ~ expr2 => Assign(param, expr1, expr2).setPos(tk)
     }
   }
 
   lazy val amyWhile: Syntax[Expr] = 
     (kw("while") ~ "(" ~ expr ~")" ~ "{" ~ expr ~ "}").map{
-      case _ ~ _ ~ cond ~ _ ~ _ ~ body ~ _  => While(cond, body)
+      case tk  ~ _ ~ cond ~ _ ~ _ ~ body ~ _  => While(cond, body).setPos(tk)
     }
   
 
@@ -207,8 +207,8 @@ object Parser extends Pipeline[Iterator[Token], Program]
 
   lazy val matchs: Syntax[Expr] = 
     (kw("match") ~ "{" ~ many1(matchCase) ~ "}").map{ 
-      case _ ~ _ ~ caseSeq ~ _ => 
-        Match(UnitLiteral(), caseSeq.toList)
+      case tk ~ _ ~ caseSeq ~ _ => 
+        Match(UnitLiteral(), caseSeq.toList).setPos(tk)
     }
   
   lazy val dotId: Syntax[String] =
@@ -254,8 +254,8 @@ object Parser extends Pipeline[Iterator[Token], Program]
       ((op("!")||op("-")) ~ simpleExpr).map{
         case op ~ nextExpr => 
           op match 
-            case Left(_) => Not(nextExpr) 
-            case Right(_) => Neg(nextExpr)
+            case Left(tk) => Not(nextExpr).setPos(tk)
+            case Right(tk) => Neg(nextExpr).setPos(tk)
       } | simpleExpr
 
   lazy val singleOp:Syntax[Token ~ Expr] = 
@@ -281,11 +281,11 @@ object Parser extends Pipeline[Iterator[Token], Program]
       case lOrR ~ folowExpr ~ optOp ~ optMatchs => 
         val leftVal = 
           lOrR match
-            case Left(_) => Not(folowExpr)
-            case Right(_) => Neg(folowExpr)
+            case Left(tk) => Not(folowExpr).setPos(tk)
+            case Right(tk) => Neg(folowExpr).setPos(tk)
         (optOp: @unchecked) match
-          case None => applyMatch(leftVal, optMatchs)
-          case Some(OperatorToken(name) ~ folowOp) => applyMatch(rewireOperator(leftVal, operatorTranslation(nullE, name, nullE), folowOp), optMatchs)
+          case None => applyMatch(leftVal, optMatchs).setPos(leftVal)
+          case Some(OperatorToken(name) ~ folowOp) => applyMatch(rewireOperator(leftVal, operatorTranslation(nullE, name, nullE), folowOp), optMatchs).setPos(leftVal)
     }
 
   
@@ -453,7 +453,7 @@ object Parser extends Pipeline[Iterator[Token], Program]
   
   lazy val ifThenElse: Syntax[Expr] = 
     (kw("if") ~ "(" ~ expr ~ ")" ~ "{" ~ expr ~ "}" ~ kw("else") ~ "{" ~ expr ~ "}").map{
-      case _ ~ _ ~ cond ~ _ ~ _ ~ thenn ~ _ ~ _ ~ _ ~ elze ~ _ => Ite(cond, thenn, elze)
+      case tk ~ _ ~ cond ~ _ ~ _ ~ thenn ~ _ ~ _ ~ _ ~ elze ~ _ => Ite(cond, thenn, elze).setPos(tk)
     }
   
   
@@ -506,12 +506,17 @@ object Parser extends Pipeline[Iterator[Token], Program]
 
   
   lazy val simpleExpr: Syntax[Expr] = 
-    literal.up[Expr] | variableOrCallOrArray | error | unitOrParenthese 
+    simpleExprNoId | variableOrCallOrArray 
 
   lazy val simpleExprNoId: Syntax[Expr] =
-    literal.up[Expr] | error | unitOrParenthese 
+    literal.up[Expr] | error | unitOrParenthese | newArray
 
-  // avoid first first conflict on (
+  lazy val newArray: Syntax[Expr] = 
+    (kw("new") ~ simpleTypeTree ~ "[" ~ expr ~ "]").map{
+      case kw ~ valType ~ _ ~ size ~ _ => ArrayNew(valType, size).setPos(kw)
+    }
+
+  
   lazy val unitOrParenthese: Syntax[Expr] =
     ("(" ~ opt(expr) ~ ")").map{
       case tk ~ optExpr ~ _ => optExpr match
@@ -521,7 +526,7 @@ object Parser extends Pipeline[Iterator[Token], Program]
 
   lazy val error: Syntax[Expr] = 
     (kw("error") ~ "(" ~ expr ~ ")").map{
-     case tke ~ _ ~ errorExpr ~ _ => Error(errorExpr).setPos(tke)
+     case tk ~ _ ~ errorExpr ~ _ => Error(errorExpr).setPos(tk)
     }
 
   // TODO: Other definitions.
@@ -539,6 +544,7 @@ object Parser extends Pipeline[Iterator[Token], Program]
       false
     }
   }
+
 
   
 

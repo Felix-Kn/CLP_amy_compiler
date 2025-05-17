@@ -114,12 +114,21 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
           val arrayType = env.get(name).getOrElse(fatal("array Type not found !", t))
           val valuesType = arrayType match 
             case ArrayType(valuesType) => valuesType
-            case _ => fatal("not defined as an array type !", t)
+            case _ => fatal("variable not defined as an array type !", t)
           topLevelConstraint(valuesType) ++ genConstraints(index, IntType)
         
         case ArraySize(name) => 
           topLevelConstraint(IntType)
-          
+
+        case t@ArraySet(name, index, newValue) => 
+          val arrayType = env.get(name).getOrElse(fatal("array Type not found !", t))
+          val valuesType = arrayType match 
+            case ArrayType(valuesType) => valuesType
+            case _ => fatal("not defined as an array type !", t)
+          genConstraints(index, IntType) ++ genConstraints(newValue, valuesType)
+        
+        case ArrayNew(valType, size) => 
+          topLevelConstraint(ArrayType(valType.tpe)) ++ genConstraints(size, IntType)
             
         case Match(scrut, cases) =>
           // Returns additional constraints from within the pattern with all bindings

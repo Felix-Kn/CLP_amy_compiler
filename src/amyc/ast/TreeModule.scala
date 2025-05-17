@@ -78,7 +78,7 @@ trait TreeModule { self =>
   // Array size 
   case class ArraySize(name: Name) extends Expr
   // Array constructor 
-  case class ArrayNew(size:Expr) extends Expr
+  case class ArrayNew(valType: TypeTree, size:Expr) extends Expr
   // Array setter 
   case class ArraySet(name:Name, index:Expr, newValue:Expr) extends Expr
 

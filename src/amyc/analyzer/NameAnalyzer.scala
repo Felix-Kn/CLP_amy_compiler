@@ -235,8 +235,8 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
           val id = locals.getOrElse(name, fatal(s"Variable $name not found", expr))
           S.ArraySize(id)
         
-        case N.ArrayNew(size) => 
-          S.ArrayNew(transformExpr(size))
+        case N.ArrayNew(valType, size) => 
+          S.ArrayNew(S.TypeTree(transformType(valType, module)), transformExpr(size))
         
         case N.ArraySet(name, index, newValue) => 
           val id = locals.getOrElse(name, fatal(s"Variable $name not found", expr))

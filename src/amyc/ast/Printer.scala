@@ -143,7 +143,7 @@ trait Printer {
         )
       case ArrayGet(name, index) => Stacked(name <:> "[" <:> rec(index) <:>  "]")
       case ArraySize(name) => Stacked(name <:> "[" <:> "]")
-      case ArrayNew(size) => Stacked("[" <:> rec(size) <:> "]")
+      case ArrayNew(valType, size) => Stacked("new" <:> rec(valType) <:> "[" <:> rec(size) <:> "]")
       case ArraySet(name, index, value) => Stacked(name <:> "[" <:> rec(index) <:> "]" <:> "=" <:> rec(value))
 
       case Ite(cond, thenn, elze) =>
