@@ -143,12 +143,12 @@ object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
 
         case Equals(lhs, rhs) => 
           Comment(expr.toString) <:>
-          cgExpr(lhs)<:> cgExpr(rhs) <:>
+          cgExpr(lhs) <:> cgExpr(rhs) <:>
           Eq 
         
         case Concat(lhs, rhs) => 
           Comment(expr.toString) <:>
-          cgExpr(lhs)<:> cgExpr(rhs) <:>
+          cgExpr(lhs) <:> cgExpr(rhs) <:>
           Call("String_concat")
         
         // error 
@@ -227,7 +227,7 @@ object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
           Comment(expr.toString) <:>
           cgExpr(newValue) <:>
           SetLocal(locals.get(name).get) <:> 
-          Const(0)
+          Const(0) // return Unit
 
         case While(cond, body) =>
           val loopName = getFreshLabel("Start_while")
@@ -240,7 +240,7 @@ object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
               If_void <:> Br(blockName) <:> End <:>
               cgExpr(body) <:> Drop <:> Br(loopName) <:>
             End <:>
-          End <:> Const(0)
+          End <:> Const(0) // return Unit
             
           
 

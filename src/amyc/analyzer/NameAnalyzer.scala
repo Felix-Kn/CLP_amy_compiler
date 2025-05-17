@@ -55,6 +55,8 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
             case None =>
               fatal(s"Could not find type $qn", tt)
           }
+        case N.ArrayType(valuesType) => 
+          S.ArrayType(transformType(N.TypeTree(valuesType), inModule))
       }
     }
 
@@ -225,6 +227,21 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
         case N.ParenthesizedExpr(e) => 
           transformExpr(e)
           
+        case N.ArrayGet(name, index) =>
+          val id = locals.getOrElse(name, fatal(s"Variable $name not found", expr))
+          S.ArrayGet(id, transformExpr(index))
+
+        case N.ArraySize(name) => 
+          val id = locals.getOrElse(name, fatal(s"Variable $name not found", expr))
+          S.ArraySize(id)
+        
+        case N.ArrayNew(size) => 
+          S.ArrayNew(transformExpr(size))
+        
+        case N.ArraySet(name, index, newValue) => 
+          val id = locals.getOrElse(name, fatal(s"Variable $name not found", expr))
+          S.ArraySet(id, transformExpr(index), transformExpr(newValue))
+
         case N.Ite(cond, thenn, elze) =>
           S.Ite(transformExpr(cond), transformExpr(thenn), transformExpr(elze))
         case N.Match(scrut, cases) =>

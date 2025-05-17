@@ -85,8 +85,19 @@ object Parser extends Pipeline[Iterator[Token], Program]
    
 
   // A type expression.
-  lazy val typeTree: Syntax[TypeTree] = primitiveType | identifierType
+  lazy val typeTree: Syntax[TypeTree] = 
+    (simpleTypeTree ~ opt("[" ~ "]")).map{
+      case simpleType ~ optArray => 
+        optArray match
+          case None => simpleType
+          case Some(_) => TypeTree(ArrayType(simpleType.tpe))
+    }
 
+  lazy val simpleTypeTree: Syntax[TypeTree] = 
+    primitiveType | identifierType
+    
+
+  
   // A built-in type (such as `Int`).
   val primitiveType: Syntax[TypeTree] = (accept(PrimTypeKind) {
     case tk@PrimTypeToken(name) => TypeTree(name match {
@@ -112,10 +123,11 @@ object Parser extends Pipeline[Iterator[Token], Program]
   
   // A user-defined type (such as `List`).
   lazy val identifierType: Syntax[TypeTree] = (identifier ~ opt("." ~ identifier)).map{
-    case id1 ~ optId => 
-      optId match
-        case None => TypeTree(ClassType(QualifiedName(None, id1)))
-        case Some(_ ~ id2) => TypeTree(ClassType(QualifiedName(Some(id1), id2)))
+    case id1 ~ optId  => 
+      val name =  optId match
+        case None => QualifiedName(None, id1)
+        case Some(_ ~ id2) => QualifiedName(Some(id1), id2)
+      TypeTree(ClassType(name))
   }
     
 
@@ -215,18 +227,25 @@ object Parser extends Pipeline[Iterator[Token], Program]
         case id ~ exprSeq => Call(QualifiedName(None, id), exprSeq.toList)
       }| followCall.map{
         case exprSeq => Call(QualifiedName(None, ""), exprSeq.toList)
-      }
+      } 
     
-  lazy val variableOrCall: Syntax[Expr] = 
-    (identifier ~ opt(isCall)).map{
+  lazy val variableOrCallOrArray: Syntax[Expr] = 
+    (identifier ~ opt(isCall || isArray)).map{
       case id ~ optCallModify => 
         optCallModify match
           case None => Variable(id)
-          case Some(callOrModify) => 
-            callOrModify match
-              case Call(QualifiedName(None, tempId), args) => 
-                    if(tempId.isEmpty()) Call(QualifiedName(None, id), args) else 
-                      Call(QualifiedName(Some(id), tempId), args)
+          case Some(moreExpr) =>
+            moreExpr match
+              case Left(callOrModify) => 
+                callOrModify match
+                  case Call(QualifiedName(None, tempId), args) => 
+                        if(tempId.isEmpty()) Call(QualifiedName(None, id), args) else 
+                          Call(QualifiedName(Some(id), tempId), args)
+              case Right(arrayCall) =>
+                arrayCall match
+                  case ArraySize(_) => ArraySize(id)
+                  case ArrayGet(_, index) => ArrayGet(id, index)
+                       
     } 
 
   
@@ -268,6 +287,8 @@ object Parser extends Pipeline[Iterator[Token], Program]
           case None => applyMatch(leftVal, optMatchs)
           case Some(OperatorToken(name) ~ folowOp) => applyMatch(rewireOperator(leftVal, operatorTranslation(nullE, name, nullE), folowOp), optMatchs)
     }
+
+  
     
   def rewireOperator(lhs: Expr, op: Expr, rhs: Expr): Expr = {
     val opLevel = getOpLevel(op)
@@ -316,7 +337,7 @@ object Parser extends Pipeline[Iterator[Token], Program]
       case LessEquals(_,_) | LessThan(_,_) => 3
       case Plus(_,_) | Minus(_,_) | Concat(_,_) => 4 
       case Mod(_,_) | Times(_,_) | Div(_,_) => 5
-      case IntLiteral(_) | StringLiteral(_) | BooleanLiteral(_) | UnitLiteral()  => 6
+      case IntLiteral(_) | StringLiteral(_) | BooleanLiteral(_) | UnitLiteral() | ArrayGet(_,_) | ArraySize(_) => 6
       case Call(_,_) | Variable(_) | Error(_) | Not(_) | Neg(_) | ParenthesizedExpr(_) => 6
       case _ => throw new AmycFatalError(s"get operator level failed match => ${op}")
   } 
@@ -327,8 +348,30 @@ object Parser extends Pipeline[Iterator[Token], Program]
       case Some(matches) => foldMatchs(v)(matches)
   }
 
+  lazy val isArray: Syntax[Expr] = 
+    ("["~ opt(expr) ~"]").map{
+      case _ ~ optExpr ~ _ => 
+        optExpr match
+          case None => ArraySize("")
+          case Some(index) => ArrayGet("", index)
+    }
+
+  lazy val arraySetOrGetOrSize: Syntax[Either[Option[Token ~ Expr], Expr ~ Option[Either[Token ~ Expr, Token ~ Expr]]]] = 
+    ("[" ~ ("]" ~ opt(singleOp) || (expr ~ "]" ~ opt(singleOp || ("=" ~ N) )))).map{
+      case _ ~ sizeOrElse => 
+        sizeOrElse match
+          case Left(_ ~ sizeOptOp) => Left(sizeOptOp) // size with maybe operator 
+          
+          case Right(index ~ _ ~ getOpOrSet) => 
+            getOpOrSet match
+              case None => Right(index ~ None)
+              case Some(opOrSet) => Right(index ~ Some(opOrSet))
+    }
+
+  
+
   lazy val idStart: Syntax[Expr] = 
-    (identifier ~ opt(singleOp || isCallWithOp || isNewAssign) ~ opt(many1(matchs))).map{
+    (identifier ~ opt(((singleOp || isCallWithOp) || (arraySetOrGetOrSize || isNewAssign))) ~ opt(many1(matchs))).map{
       case id1 ~ optWtf ~ optMatchs => 
         optWtf match
           case None => applyMatch(Variable(id1), optMatchs)
@@ -344,16 +387,36 @@ object Parser extends Pipeline[Iterator[Token], Program]
                       case Call(QualifiedName(None, tempId), args) => 
                         if(tempId.isEmpty()) Call(QualifiedName(None, id1), args) else 
                           Call(QualifiedName(Some(id1), tempId), args)
-                    applyMatch(updatedCall, optMatchs)
-                      
-                    
                     (optOp: @unchecked) match
                       case None => applyMatch(updatedCall, optMatchs)
                       case Some((OperatorToken(name) ~ rhs)) =>
                         applyMatch(rewireOperator(updatedCall, operatorTranslation(nullE, name, nullE), rhs), optMatchs) 
 
-              case Right(assign) =>
-                assign match {case reAssign(_, newValue) => reAssign(id1, applyMatch(newValue, optMatchs))}
+              case Right(arrayOrAssign) =>
+                  arrayOrAssign match
+                    case Left(array) =>
+                      array match
+                        case Left(sizeOptOp) =>
+                          val updatedArray = 
+                          (sizeOptOp: @unchecked) match
+                            case None => ArraySize(id1)
+                            case Some(OperatorToken(name) ~ rhs) => 
+                              rewireOperator(ArraySize(id1), operatorTranslation(nullE, name, nullE), rhs)
+                          applyMatch(updatedArray, optMatchs)
+
+                        case Right(index ~ optNext) => 
+                          optNext match
+                            case None => applyMatch(ArrayGet(id1, index), optMatchs)
+                            case Some(getOpOrSet) =>
+                              (getOpOrSet: @unchecked) match
+                                case Left(OperatorToken(name) ~ rhs) => 
+                                  applyMatch(rewireOperator(ArrayGet(id1, index), operatorTranslation(nullE, name, nullE), rhs), optMatchs)
+                                case Right(_ ~ newValue) => 
+                                  ArraySet(id1, index, applyMatch(newValue, optMatchs))
+                              
+
+                    case Right(assign) =>
+                      assign match {case reAssign(_, newValue) => reAssign(id1, applyMatch(newValue, optMatchs))}
 
     } | elseSimpleExpr | unaryOp
 
@@ -443,7 +506,7 @@ object Parser extends Pipeline[Iterator[Token], Program]
 
   
   lazy val simpleExpr: Syntax[Expr] = 
-    literal.up[Expr] | variableOrCall | error | unitOrParenthese 
+    literal.up[Expr] | variableOrCallOrArray | error | unitOrParenthese 
 
   lazy val simpleExprNoId: Syntax[Expr] =
     literal.up[Expr] | error | unitOrParenthese 

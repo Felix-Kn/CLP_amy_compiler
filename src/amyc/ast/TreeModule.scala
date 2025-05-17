@@ -73,6 +73,15 @@ trait TreeModule { self =>
   // while loops
   case class While(cond:Expr, body:Expr) extends Expr
 
+  // Array getter
+  case class ArrayGet(name: Name, index:Expr) extends Expr
+  // Array size 
+  case class ArraySize(name: Name) extends Expr
+  // Array constructor 
+  case class ArrayNew(size:Expr) extends Expr
+  // Array setter 
+  case class ArraySet(name:Name, index:Expr, newValue:Expr) extends Expr
+
   case class reAssign(name: Name, newValue: Expr) extends Expr
 
   // Pattern matching
@@ -118,6 +127,9 @@ trait TreeModule { self =>
   }
   case class ClassType(qname: QualifiedName) extends Type {
     override def toString: String = printer.printQName(qname)(false).print
+  }
+  case class ArrayType(valuesType: Type) extends Type {
+    override def toString: String = valuesType.toString ++ "[]"
   }
 
   // A wrapper for types that is also a Tree (i.e. has a position)

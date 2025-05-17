@@ -6,6 +6,7 @@ import amyc.ast.SymbolicTreeModule._
 import amyc.ast.Identifier
 
 
+
 // The type checker for Amy
 // Takes a symbolic program and rejects it if it does not follow the Amy typing rules.
 object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTable)] {
@@ -102,13 +103,23 @@ object TypeChecker extends Pipeline[(Program, SymbolTable), (Program, SymbolTabl
           genConstraints(value, df.tt.tpe) ++ genConstraints(body, expected)(env.updated(df.name, df.tt.tpe))
         
         case t@reAssign(name, newValue) => 
-
           val varType = env.get(name).getOrElse(fatal("name analyzer failed to detect reassignement before declaration !", t))
           genConstraints(newValue, varType) ++ topLevelConstraint(UnitType)
         
         case While(cond, body) => 
           val bodyConstraint = TypeVariable.fresh()
           genConstraints(cond, BooleanType) ++ genConstraints(body, bodyConstraint) ++ topLevelConstraint(UnitType) 
+
+        case t@ArrayGet(name, index) => 
+          val arrayType = env.get(name).getOrElse(fatal("array Type not found !", t))
+          val valuesType = arrayType match 
+            case ArrayType(valuesType) => valuesType
+            case _ => fatal("not defined as an array type !", t)
+          topLevelConstraint(valuesType) ++ genConstraints(index, IntType)
+        
+        case ArraySize(name) => 
+          topLevelConstraint(IntType)
+          
             
         case Match(scrut, cases) =>
           // Returns additional constraints from within the pattern with all bindings

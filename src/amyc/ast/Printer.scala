@@ -141,7 +141,11 @@ trait Printer {
           Indented(rec(body)),
           "}"
         )
-        
+      case ArrayGet(name, index) => Stacked(name <:> "[" <:> rec(index) <:>  "]")
+      case ArraySize(name) => Stacked(name <:> "[" <:> "]")
+      case ArrayNew(size) => Stacked("[" <:> rec(size) <:> "]")
+      case ArraySet(name, index, value) => Stacked(name <:> "[" <:> rec(index) <:> "]" <:> "=" <:> rec(value))
+
       case Ite(cond, thenn, elze) =>
         Stacked(
           "(if(" <:> rec(cond) <:> ") {",
@@ -182,6 +186,7 @@ trait Printer {
           case StringType => "String"
           case UnitType => "Unit"
           case ClassType(name) => name
+          case ArrayType(valuesType) => rec(TypeTree(valuesType)) <:> "[]"
         }
       case ParenthesizedExpr(e) => rec(e)
     }
