@@ -1,0 +1,3 @@
+object Var1
+val a:Int(32) = var b:String = "a"; ()
+end object Var1

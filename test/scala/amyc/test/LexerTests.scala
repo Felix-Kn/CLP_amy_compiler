@@ -50,4 +50,9 @@ class LexerTests extends TestSuite {
 
   @Test def testWhitespace = shouldOutput("Whitespace")
 
+
+  // our test
+  @Test def testArray = shouldOutput("Array")
+  @Test def testVarWhile = shouldOutput("VarWhile")
+
 }

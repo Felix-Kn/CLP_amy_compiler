@@ -1,0 +1,3 @@
+KeywordToken(while)(1:1)
+KeywordToken(var)(2:1)
+EOFToken()(2:4)

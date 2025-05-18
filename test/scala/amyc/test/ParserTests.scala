@@ -95,4 +95,13 @@ class ParserTests extends TestSuite {
   @Test def testWrongQName3 = shouldFail("WrongQName3")
   @Test def testWrongQName4 = shouldFail("WrongQName4")
 
+  // our test:
+  @Test def testRewire = shouldOutput("Rewire")
+  @Test def testVarFail1 = shouldFail("VarFail1")
+  @Test def testVarFail2 = shouldFail("VarFail2")
+  @Test def testVarFail3 = shouldFail("VarFail3")
+  @Test def testArrayFail1 = shouldFail("ArrayFail1")
+  @Test def testArrayFail2 = shouldFail("ArrayFail2")
+  @Test def testArrayFail3 = shouldFail("ArrayFail3")
+
 }

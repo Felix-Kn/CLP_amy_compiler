@@ -1,0 +1,3 @@
+object Var2
+var a:Int(32) = val b:String = "a"; ()
+end object Var2

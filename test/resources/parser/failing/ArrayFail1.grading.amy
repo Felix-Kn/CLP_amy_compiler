@@ -1,0 +1,3 @@
+object ArrayFail1
+val list:Int(32)[] = new Int(32)[]; ()
+end object ArrayFail1
