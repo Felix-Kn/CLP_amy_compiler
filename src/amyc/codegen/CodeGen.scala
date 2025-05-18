@@ -8,6 +8,8 @@ import amyc.utils.{Context, Pipeline}
 import wasm._
 import Instructions._
 import Utils._
+import amyc.parsing.Tokens.CommentToken
+import java.util.concurrent.CopyOnWriteArraySet
 
 
 val I32Size = 4
@@ -159,6 +161,8 @@ object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
           Unreachable
         
 
+        
+
         case AmyCall(qname, args) => 
           table.getFunction(qname) match
             case Some(func) => {
@@ -242,7 +246,61 @@ object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
             End <:>
           End <:> Const(0) // return Unit
             
+        case ArrayNew(valType, sizeExpr) => 
+          val size = lh.getFreshLocal()
+          Comment(expr.toString) <:>
+          cgExpr(sizeExpr) <:>
+          SetLocal(size) <:>
+          GetGlobal(memoryBoundary) <:>
+          GetLocal(size) <:> 
+          Store <:>
+          GetGlobal(memoryBoundary) <:> // return address
+          GetGlobal(memoryBoundary) <:> 
+          GetLocal(size) <:>  Const(I32Size) <:> Mul <:> 
+          Add <:>
+          Const(I32Size) <:>
+          Add <:>
+          SetGlobal(memoryBoundary) // += size*I32Size + I32Size 
           
+
+        case ArrayGet(name, indexExpr) => 
+          val index = lh.getFreshLocal()
+          val addressLocal = locals.get(name).get 
+          Comment(expr.toString) <:>
+          cgExpr(indexExpr) <:> SetLocal(index) <:> 
+          GetLocal(addressLocal) <:> Load <:> //get array size
+          GetLocal(index) <:> Le_s <:> // size <= index
+          GetLocal(index) <:> Const(0) <:> Lt_s <:> // index < 0
+          Eq <:> Eqz <:>// not a valid index (can only be equal if in boundary)
+          If_void <:>
+            Unreachable <:> // trap
+          End <:>
+          GetLocal(index) <:> Const(I32Size) <:> Mul <:> 
+          GetLocal(addressLocal) <:> Const(I32Size) <:> Add <:> Add <:>//address
+          Load 
+
+        case ArraySet(name, indexExpr, newValue) => 
+          val index = lh.getFreshLocal()
+          val addressLocal = locals.get(name).get 
+          Comment(expr.toString) <:>
+          cgExpr(indexExpr) <:> SetLocal(index) <:> 
+          GetLocal(addressLocal) <:> Load <:> //get array size
+          GetLocal(index) <:> Le_s <:> // size <= index
+          GetLocal(index) <:> Const(0) <:> Lt_s <:>// index < 0
+          Eq <:> Eqz <:> // not a valid index (can only be equal if in boundary)
+          If_void <:>
+            Unreachable <:> // trap
+          End <:>
+          GetLocal(index) <:> Const(I32Size) <:> Mul <:>
+           GetLocal(addressLocal) <:> Const(I32Size) <:> Add <:> Add <:>//address
+          cgExpr(newValue) <:> Store <:> 
+          Const(0) // Unit return
+
+        case ArraySize(name) => 
+          val addressLocal = locals.get(name).get 
+          Comment(expr.toString) <:> 
+          GetLocal(addressLocal) <:> Load
+
 
         case Match(scrut, cases) =>
             
