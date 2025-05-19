@@ -124,15 +124,20 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
       ).setPos(fd)
     }
 
+    
     def transformExpr(expr: N.Expr)
                      (implicit module: String, names: (Map[String, Identifier], Map[String, Identifier]), isModifiable: Set[Identifier]): S.Expr = {
       val (params, locals) = names
+      def getVal(name:String): Identifier = {
+        locals.getOrElse(name, // Local variables shadow parameters!
+              params.getOrElse(name,
+                fatal(s"Variable $name not found", expr)))
+      }
+
       val res = expr match {
         case N.Variable(name) =>
-          S.Variable(
-            locals.getOrElse(name, // Local variables shadow parameters!
-              params.getOrElse(name,
-                fatal(s"Variable $name not found", expr))))
+          S.Variable(getVal(name))
+
         case N.IntLiteral(value) =>
           S.IntLiteral(value)
         case N.BooleanLiteral(value) =>
@@ -228,19 +233,16 @@ object NameAnalyzer extends Pipeline[N.Program, (S.Program, SymbolTable)] {
           transformExpr(e)
           
         case N.ArrayGet(name, index) =>
-          val id = locals.getOrElse(name, fatal(s"Variable $name not found", expr))
-          S.ArrayGet(id, transformExpr(index))
+          S.ArrayGet(getVal(name), transformExpr(index))
 
         case N.ArraySize(name) => 
-          val id = locals.getOrElse(name, fatal(s"Variable $name not found", expr))
-          S.ArraySize(id)
+          S.ArraySize(getVal(name))
         
         case N.ArrayNew(valType, size) => 
           S.ArrayNew(S.TypeTree(transformType(valType, module)), transformExpr(size))
         
         case N.ArraySet(name, index, newValue) => 
-          val id = locals.getOrElse(name, fatal(s"Variable $name not found", expr))
-          S.ArraySet(id, transformExpr(index), transformExpr(newValue))
+          S.ArraySet(getVal(name), transformExpr(index), transformExpr(newValue))
 
         case N.Ite(cond, thenn, elze) =>
           S.Ite(transformExpr(cond), transformExpr(thenn), transformExpr(elze))
