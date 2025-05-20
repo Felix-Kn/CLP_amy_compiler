@@ -1,0 +1,14 @@
+object Test3
+  
+  var i: Int(32) = 0;
+  var j: Int(32) = 0;
+  while (i < 2) {
+    while (j < 2) {
+      Std.printString("i: " ++ Std.intToString(i) ++ ", j: " ++ Std.intToString(j));
+      j = j + 1
+    };
+    i = i + 1;
+    j = 0 
+  }
+  
+end Test3

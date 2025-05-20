@@ -61,4 +61,19 @@ abstract class ExecutionTests extends TestSuite {
   @Test def testLocals2 = shouldFail("Locals")
 
   @Test def testFunCallEnv = shouldOutput(List("FunCallEnv", "Std"), "FunCallEnv")
+
+
+  // our test
+  @Test def Test1 = shouldOutput(List("Std", "Test1"), "Test1", "")
+  @Test def Test2 = shouldOutput(List("Std", "Test2"), "Test2", "")
+  @Test def Test3 = shouldOutput(List("Std", "Test3"), "Test3", "")
+  @Test def Test4 = shouldOutput(List("Std", "List", "Option", "Test4"), "Test4", "")
+  @Test def Test5 = shouldOutput(List("Std", "Test5"), "Test5", "")
+
+  // out of bound test
+  @Test def TestFail1 = shouldFail("Array1")
+  @Test def TestFail2 = shouldFail("Array2")
+  @Test def TestFail3 = shouldFail("Array3")
+  @Test def TestFail4 = shouldFail("Array4")
+  
 }

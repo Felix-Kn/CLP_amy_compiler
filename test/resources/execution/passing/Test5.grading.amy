@@ -1,0 +1,39 @@
+ object Test5
+    def assert_0(v:Int(32)[]): Unit = {
+        var i:Int(32) = 0;
+        var isZero: Boolean = true;
+        while(i < v[] && isZero){
+            isZero = isZero && v[i] == 0;
+            i = i+1
+        };
+        if(isZero){
+            Std.printString("All good !!")
+        }else{
+             Std.printString("Canary catched memory overflow/underflow !!")
+        }
+    }
+
+    def innit_0(v:Int(32)[]): Unit = {
+        var i:Int(32) = 0;
+        while(i<v[]){
+            v[i] = 0;
+            i = i+1
+        }
+    }
+        
+
+    val canaryLeft: Int(32)[] = new Int(32)[10];
+    val test: Int(32)[] = new Int(32)[50];
+    val canaryRight: Int(32)[] = new Int(32)[10];
+    innit_0(canaryLeft);
+    innit_0(canaryRight);
+
+    var i:Int(32) = 0;
+    while(i<test[]){
+        test[i] = -1;
+        i = i+1
+    };
+    assert_0(canaryLeft);
+    assert_0(canaryRight)
+
+end Test5

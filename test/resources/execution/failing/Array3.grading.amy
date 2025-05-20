@@ -1,0 +1,5 @@
+Object TestA1
+val t: Int(32) = new Int(32)[10];
+t[55]
+
+end TestA1

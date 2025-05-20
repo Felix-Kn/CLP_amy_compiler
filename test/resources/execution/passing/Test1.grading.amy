@@ -1,0 +1,18 @@
+object Test1 
+  def printArray(arr: Int(32)[]): Unit = {
+    var i: Int(32) = 0 ;
+    val size: Int(32) = arr[];
+    while (i < size) {
+      Std.printString("index: " ++ Std.intToString(i) ++ ", value: " ++ Std.intToString(arr[i]));
+      i = i + 1
+    }
+  }
+
+  
+    var arr: Int(32)[] = new Int(32)[3];
+    arr[0] = 1;
+    arr[1] = 2;
+    arr[2] = 3;
+    printArray(arr)
+  
+end Test1

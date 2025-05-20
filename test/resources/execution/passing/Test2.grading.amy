@@ -1,0 +1,20 @@
+object Test2
+  
+    var arr: Int(32)[] = new Int(32)[2];
+    arr[0] = 1;
+    arr[1] = 2;
+    arr = new Int(32)[5]; // cehck correct pointer swap
+    arr[0] = 3;
+    arr[1] = 4;
+    arr[2] = 5;
+    arr[3] = 6;
+    arr[4] = 7;
+
+    Std.printInt(arr[0]); 
+    Std.printInt(arr[1]); 
+    Std.printInt(arr[2]); 
+    Std.printInt(arr[3]); 
+    Std.printInt(arr[4]) 
+
+
+end Test2
