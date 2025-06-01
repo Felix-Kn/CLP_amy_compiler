@@ -1,0 +1,13 @@
+object TestArray1 
+var i : Int(32)[] = new Int(32)[10];
+var counter : Int(32) = 0;
+while(counter < i[]){
+    i[counter] = counter
+} match {
+    case () => i[] match {
+        case 10 => i[3] match{
+            case 3 => i = new Int(32)[21]
+        }
+    }
+}
+end TestArray1

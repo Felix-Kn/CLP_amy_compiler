@@ -1,0 +1,23 @@
+object Fib
+  def fibonacci(n:Int(32)): Int(32)[] = {
+    if(n <= 1){error("")}else{()};
+    val fib:Int(32)[] = new Int(32)[n];
+    fib[0] = 0;
+    fib[1] = 1;
+
+    var i:Int(32) = 2;
+    while (i < n) {
+      fib[i] = fib[i - 1] + fib[i - 2];
+      i = i + 1
+    };
+    fib
+  }
+  val res:Int(32)[] = fibonacci(10);
+  var i:Int(32) = 0;
+  while (i < res[]) {
+    Std.printString("index : " ++ Std.intToString(i) ++
+                    " res : " ++ Std.intToString(res[i]));
+    i = i + 1
+  }
+
+end Fib

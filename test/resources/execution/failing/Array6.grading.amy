@@ -1,0 +1,3 @@
+object Array6
+ val i:Boolean[] = new Boolean[0]; 0
+end Array6

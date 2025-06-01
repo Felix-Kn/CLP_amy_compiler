@@ -1,0 +1,238 @@
+### FAILING TESTS ###
+
+Test: Array3.grading
+-- Test Content --
+Object TestA3
+val t: Int(32) = new Int(32)[10];
+t[55]
+
+end TestA3
+
+================================================================================
+Test: Array6.grading
+-- Test Content --
+object Array6
+ val i:Boolean[] = new Boolean[0]; 0
+end Array6
+
+================================================================================
+Test: Array4.grading
+-- Test Content --
+Object TestA4
+var t: Int(32) = new Int(32)[10];
+t = new Int(32)[11]
+end TestA4
+
+================================================================================
+Test: Array1.grading
+-- Test Content --
+Object TestA1
+val t: Int(32) = new Int(32)[10];
+t[10]
+
+end TestA1
+
+================================================================================
+Test: Array5.grading
+-- Test Content --
+object Array5
+ val i:Boolean[] = new Boolean[-1]; 0
+end Array5
+
+================================================================================
+Test: Array2.grading
+-- Test Content --
+Object TestA2
+val t: Int(32) = new Int(32)[10];
+t[-1]
+
+end TestA2
+
+================================================================================
+
+### PASSING TESTS ###
+
+Test: Test2.grading
+-- Test Content --
+object Test2
+  
+    var arr: Int(32)[] = new Int(32)[2];
+    arr[0] = 1;
+    arr[1] = 2;
+    arr = new Int(32)[5]; // check correct pointer swap
+    arr[0] = 3;
+    arr[1] = 4;
+    arr[2] = 5;
+    arr[3] = 6;
+    arr[4] = 7;
+
+    Std.printInt(arr[0]); 
+    Std.printInt(arr[1]); 
+    Std.printInt(arr[2]); 
+    Std.printInt(arr[3]); 
+    Std.printInt(arr[4]) 
+
+
+end Test2
+
+-- Expected Output --
+3
+4
+5
+6
+7
+
+================================================================================
+Test: Test5.grading
+-- Test Content --
+ object Test5
+    def assert_0(v:Int(32)[]): Unit = {
+        var i:Int(32) = 0;
+        var isZero: Boolean = true;
+        while(i < v[] && isZero){
+            isZero = isZero && v[i] == 0;
+            i = i+1
+        };
+        if(isZero){
+            Std.printString("All good !!")
+        }else{
+             Std.printString("Canary catched memory overflow/underflow !!")
+        }
+    }
+
+    def innit_0(v:Int(32)[]): Unit = {
+        var i:Int(32) = 0;
+        while(i<v[]){
+            v[i] = 0;
+            i = i+1
+        }
+    }
+        
+
+    val canaryLeft: Int(32)[] = new Int(32)[10];
+    val test: Int(32)[] = new Int(32)[50];
+    val canaryRight: Int(32)[] = new Int(32)[10];
+    innit_0(canaryLeft);
+    innit_0(canaryRight);
+
+    var i:Int(32) = 0;
+    while(i<test[]){
+        test[i] = -1;
+        i = i+1
+    };
+    assert_0(canaryLeft);
+    assert_0(canaryRight)
+
+end Test5
+-- Expected Output --
+All good !!
+All good !!
+
+================================================================================
+Test: Test4.grading
+-- Test Content --
+object Test4
+    var test : L.List = L.Nil();
+
+    Std.printString(L.toString(test));
+
+    test = L.Cons(1, L.Cons(2, L.Nil()));
+
+    Std.printString(L.toString(test))
+
+
+end Test4
+-- Expected Output --
+List()
+List(1, 2)
+
+================================================================================
+Test: Test3.grading
+-- Test Content --
+object Test3
+  
+  var i: Int(32) = 0;
+  var j: Int(32) = 0;
+  while (i < 2) {
+    while (j < 2) {
+      Std.printString("i: " ++ Std.intToString(i) ++ ", j: " ++ Std.intToString(j));
+      j = j + 1
+    };
+    i = i + 1;
+    j = 0 
+  }
+  
+end Test3
+
+-- Expected Output --
+i: 0, j: 0
+i: 0, j: 1
+i: 1, j: 0
+i: 1, j: 1
+
+================================================================================
+Test: Test1.grading
+-- Test Content --
+object Test1 
+  def printArray(arr: Int(32)[]): Unit = {
+    var i: Int(32) = 0 ;
+    val size: Int(32) = arr[];
+    while (i < size) {
+      Std.printString("index: " ++ Std.intToString(i) ++ ", value: " ++ Std.intToString(arr[i]));
+      i = i + 1
+    }
+  }
+
+  
+    var arr: Int(32)[] = new Int(32)[3];
+    arr[0] = 1;
+    arr[1] = 2;
+    arr[2] = 3;
+    printArray(arr)
+  
+end Test1
+
+-- Expected Output --
+index: 0, value: 1
+index: 1, value: 2
+index: 2, value: 3
+
+================================================================================
+Test: FibonacciEndBoss.grading
+-- Test Content --
+object Fib
+  def fibonacci(n:Int(32)): Int(32)[] = {
+    if(n <= 1){error("")}else{()};
+    val fib:Int(32)[] = new Int(32)[n];
+    fib[0] = 0;
+    fib[1] = 1;
+
+    var i:Int(32) = 2;
+    while (i < n) {
+      fib[i] = fib[i - 1] + fib[i - 2];
+      i = i + 1
+    };
+    fib
+  }
+  val res:Int(32)[] = fibonacci(10);
+  var i:Int(32) = 0;
+  while (i < res[]) {
+    Std.printString("index : " ++ Std.intToString(i) ++
+                    " res : " ++ Std.intToString(res[i]));
+    i = i + 1
+  }
+
+end Fib
+-- Expected Output --
+index : 0 res : 0
+index : 1 res : 1
+index : 2 res : 1
+index : 3 res : 2
+index : 4 res : 3
+index : 5 res : 5
+index : 6 res : 8
+index : 7 res : 13
+index : 8 res : 21
+index : 9 res : 34
+
+================================================================================

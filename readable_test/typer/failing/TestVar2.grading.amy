@@ -1,0 +1,4 @@
+object TestVar2 
+var i : Int(32) = 1;
+i = true
+end TestVar2

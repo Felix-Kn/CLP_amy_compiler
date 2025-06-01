@@ -1,0 +1,34 @@
+### FAILING TESTS ###
+
+
+### PASSING TESTS ###
+
+Test: Array.grading
+-- Test Content --
+[]
+[1]
+][
+new
+-- Expected Output --
+DelimiterToken([)(1:1)
+DelimiterToken(])(1:2)
+DelimiterToken([)(2:1)
+IntLitToken(1)(2:2)
+DelimiterToken(])(2:3)
+DelimiterToken(])(3:1)
+DelimiterToken([)(3:2)
+KeywordToken(new)(4:1)
+EOFToken()(4:4)
+
+================================================================================
+Test: VarWhile.grading
+-- Test Content --
+while
+var
+-- Expected Output --
+KeywordToken(while)(1:1)
+KeywordToken(var)(2:1)
+EOFToken()(2:4)
+
+
+================================================================================

@@ -1,0 +1,5 @@
+object Var3
+var a:Int(32) = 1;
+var b:Int(32) = 2;
+a = b = 3; ()
+end object Var3

@@ -1,0 +1,93 @@
+### FAILING TESTS ###
+
+Test: ArrayFail3.grading
+-- Test Content --
+object ArrayFail3
+val list:Int(32)[] = new Int(32)[10];
+list[1] = list[2] = 3
+end object ArrayFail3
+
+================================================================================
+Test: VarFail1.grading
+-- Test Content --
+object Var1
+val a:Int(32) = var b:String = "a"; ()
+end object Var1
+
+================================================================================
+Test: VarFail2.grading
+-- Test Content --
+object Var2
+var a:Int(32) = val b:String = "a"; ()
+end object Var2
+
+================================================================================
+Test: ArrayFail2.grading
+-- Test Content --
+object ArrayFail2
+val list:Int(32)[] = new Int(32)[10];
+list[] = 1
+end object ArrayFail2
+
+================================================================================
+Test: VarFail3.grading
+-- Test Content --
+object Var3
+var a:Int(32) = 1;
+var b:Int(32) = 2;
+a = b = 3; ()
+end object Var3
+
+================================================================================
+Test: ArrayFail1.grading
+-- Test Content --
+object ArrayFail1
+val list:Int(32)[] = new Int(32)[]; ()
+end object ArrayFail1
+
+================================================================================
+
+### PASSING TESTS ###
+
+Test: Rewire.grading
+-- Test Content --
+object Rewire
+val i: Int(32) = 1;
+val list:Int(32)[] = new Int(32)[10];
+i + i * 10;
+1 / 1 * 10;
+1 + i * 10;
+-1 + i * 10;
+i * i + 10;
+1 / 1 - 10;
+1 % i * 10;
+list[] + i * 10;
+list[1] + i * 10;
+"a"++"b"++"c";
+1 == 2 && true;
+1 <= 2 && true;
+1 < 2 && true;
+false && true || false;
+false || true && false;
+false && (true || false);
+
+i + (i * 10);
+1 / (1 * 10);
+1 + (i * 10);
+-1 + (i * 10);
+i * (i + 10);
+1 / (1 - 10);
+1 % (i * 10);
+(list[] + i) * 10;
+(list[1] + i) * 10;
+list[] + i * 10;
+list[1] + i * 10;
+("a"++"b")++"c";
+"a"++("b"++"c");
+1 + list[] * list[2];
+()
+
+end Rewire
+
+
+================================================================================

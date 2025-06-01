@@ -1,0 +1,101 @@
+### FAILING TESTS ###
+
+Test: TestArray5.grading
+-- Test Content --
+object TestArray5 
+val i : Int(32)[] = new Int(32)[10];
+i[] match {
+    case true => i[0] = 0
+}
+end TestArray5
+
+================================================================================
+Test: TestArray2.grading
+-- Test Content --
+object TestArray2 
+val i : Int(32)[] = new Int(32)[10];
+i[3] = false 
+end TestArray2
+
+================================================================================
+Test: TestVar1.grading
+-- Test Content --
+object TestVar1 
+var i : Int(32) = true
+end TestVar1
+
+================================================================================
+Test: WhileUnit.grading
+-- Test Content --
+object TestWhile1 
+var i : Boolean = true; 
+while (i) {
+    i = false
+} match {
+    case true => i = false
+}
+end TestWhile1
+
+================================================================================
+Test: TestVar2.grading
+-- Test Content --
+object TestVar2 
+var i : Int(32) = 1;
+i = true
+end TestVar2
+
+================================================================================
+Test: TestArray1.grading
+-- Test Content --
+object TestArray1 
+val i : Int(32)[] = new Boolean[10]
+end TestArray1
+
+================================================================================
+Test: TestArray4.grading
+-- Test Content --
+object TestArray5 
+val i : Int(32)[] = new Int(32)[10];
+i[0] match {
+    case true => i[0] = 0
+}
+end TestArray5
+
+================================================================================
+Test: WhileNotBool.grading
+-- Test Content --
+object TestWhile1 
+while (2) {
+    val i : Int(32) = 0
+}
+end TestWhile1
+
+================================================================================
+Test: TestArray3.grading
+-- Test Content --
+object TestArray3
+var i : Int(32)[] = new Int(32)[10];
+i = new Boolean[10]
+end TestArray3
+
+================================================================================
+
+### PASSING TESTS ###
+
+Test: TestWhileVarArray.grading
+-- Test Content --
+object TestArray1 
+var i : Int(32)[] = new Int(32)[10];
+var counter : Int(32) = 0;
+while(counter < i[]){
+    i[counter] = counter
+} match {
+    case () => i[] match {
+        case 10 => i[3] match{
+            case 3 => i = new Int(32)[21]
+        }
+    }
+}
+end TestArray1
+
+================================================================================

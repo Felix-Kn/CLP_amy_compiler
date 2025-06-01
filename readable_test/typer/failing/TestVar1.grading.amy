@@ -1,0 +1,3 @@
+object TestVar1 
+var i : Int(32) = true
+end TestVar1

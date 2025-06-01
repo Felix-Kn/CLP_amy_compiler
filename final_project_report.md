@@ -36,7 +36,7 @@ Our final goal is to be able to simplify some verbose code, necessary by the fun
 ```scala
     object Fib
       def fibonacci(n:Int(32)): Int(32)[] = {
-        if(n <= 1){error("")}else({});
+        if(n <= 1){error("")}else{()};
     
         val fib:Int(32)[] = new Int(32)[n];
         fib[0] = 0;
@@ -149,12 +149,10 @@ Our final goal is to be able to simplify some verbose code, necessary by the fun
 5. **Code Generation:**
   - Arrays are stored in memory and defined by their address (same as objects).
   - We store the size at the memory pointed by the array address. 
-  - Array creation must be with a positive size (>= 0)
+  - Array creation must be with a positive size (> 0)
   - Every accesses to an array are bound check (both load and stores), if it goes out of bound the program crashes (unreachable instruction executed).
 
 
-        
-      
 ---
 
 ### While Loops
@@ -171,7 +169,8 @@ Our final goal is to be able to simplify some verbose code, necessary by the fun
 
 ## Extensions
 
-Modifiable variables could be enhanced further by allowing pass by reference in function calls
+- Modifiable variables could be enhanced further by allowing pass by reference in function calls, but since WASM does not support it we didn't implement it.
+- Arrays could be further extended by adding a way to fill them with values at creation, match could also be supported, could allow multidimentional arrays etc.
 
 ---
 

@@ -251,6 +251,10 @@ object CodeGen extends Pipeline[(Program, SymbolTable), Module] {
           Comment(expr.toString) <:>
           cgExpr(sizeExpr) <:>
           SetLocal(size) <:>
+          GetLocal(size) <:>  Const(0) <:> Le_s <:>
+          If_void <:>
+            Unreachable <:> // trap
+          End <:>
           GetGlobal(memoryBoundary) <:>
           GetLocal(size) <:> 
           Store <:>

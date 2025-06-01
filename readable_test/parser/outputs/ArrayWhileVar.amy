@@ -1,0 +1,15 @@
+object Viva
+  var varA: Int(32)[] =
+    newInt(32)[10];
+  val valA: Int(32)[] =
+    newInt(32)[10];
+  var counter: Int(32) =
+    0;
+  (while((counter < varA[])) {
+    (
+      varA[counter]=counter;
+      valA[counter]=counter;
+      counter = (counter + 1)
+    )
+  })
+end Viva

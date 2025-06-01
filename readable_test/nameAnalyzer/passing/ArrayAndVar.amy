@@ -1,0 +1,9 @@
+object Viva
+  def foo(): Int(32) = {
+    val j : Int(32)[] = new Int(32)[10];
+    var i : Int(32) = 0;
+    i = i + 1;
+    j[0] = i;
+    j[0]
+  }
+end Viva

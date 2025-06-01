@@ -76,5 +76,7 @@ abstract class ExecutionTests extends TestSuite {
   @Test def TestFail2 = shouldFail("Array2")
   @Test def TestFail3 = shouldFail("Array3")
   @Test def TestFail4 = shouldFail("Array4")
+  @Test def TestFail5 = shouldFail("Array5")
+  @Test def TestFail6 = shouldFail("Array6")
   
 }

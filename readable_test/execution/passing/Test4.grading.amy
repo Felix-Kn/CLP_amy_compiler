@@ -1,0 +1,11 @@
+object Test4
+    var test : L.List = L.Nil();
+
+    Std.printString(L.toString(test));
+
+    test = L.Cons(1, L.Cons(2, L.Nil()));
+
+    Std.printString(L.toString(test))
+
+
+end Test4

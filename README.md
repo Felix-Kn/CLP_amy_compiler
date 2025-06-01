@@ -1,7 +1,7 @@
 # Final project
 ## Run
 
-Amy programms can be compile the same way as lab5 using the amyc.sh script or run `sbt "run fileName.amy"`.
+Amy programms can be compiled the same way as lab5 using the amyc.sh script or run `sbt "run fileName.amy"`.
 
 ## File modified
 
