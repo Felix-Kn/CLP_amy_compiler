@@ -1,0 +1,10 @@
+index : 0 res : 0
+index : 1 res : 1
+index : 2 res : 1
+index : 3 res : 2
+index : 4 res : 3
+index : 5 res : 5
+index : 6 res : 8
+index : 7 res : 13
+index : 8 res : 21
+index : 9 res : 34

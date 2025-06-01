@@ -69,6 +69,7 @@ abstract class ExecutionTests extends TestSuite {
   @Test def Test3 = shouldOutput(List("Std", "Test3"), "Test3", "")
   @Test def Test4 = shouldOutput(List("Std", "List", "Option", "Test4"), "Test4", "")
   @Test def Test5 = shouldOutput(List("Std", "Test5"), "Test5", "")
+  @Test def Test6 = shouldOutput(List("Std", "FibonacciEndBoss"), "FibonacciEndBoss", "")
 
   // out of bound test
   @Test def TestFail1 = shouldFail("Array1")

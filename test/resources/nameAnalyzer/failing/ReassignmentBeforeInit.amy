@@ -1,0 +1,7 @@
+object Undefined
+  def foo(): Int(32) = {
+    i = i + 1;
+    var i : Int(32) = 0;
+    i
+  }
+end Undefined

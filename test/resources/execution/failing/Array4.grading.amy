@@ -1,5 +1,4 @@
-Object TestA1
-val t: Int(32) = new Int(32)[10];
-t[-1]
-
-end TestA1
+Object TestA4
+var t: Int(32) = new Int(32)[10];
+t = new Int(32)[11]
+end TestA4

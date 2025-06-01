@@ -1,0 +1,4 @@
+object TestArray3
+var i : Int(32)[] = new Int(32)[10];
+i = new Boolean[10]
+end TestArray3

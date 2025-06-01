@@ -139,7 +139,7 @@ trait Printer {
         Stacked(
           "(while(" <:> rec(cond) <:> ") {",
           Indented(rec(body)),
-          "}"
+          "})"
         )
       case ArrayGet(name, index) => Stacked(name <:> "[" <:> rec(index) <:>  "]")
       case ArraySize(name) => Stacked(name <:> "[" <:> "]")

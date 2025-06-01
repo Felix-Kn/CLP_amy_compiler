@@ -103,5 +103,6 @@ class ParserTests extends TestSuite {
   @Test def testArrayFail1 = shouldFail("ArrayFail1")
   @Test def testArrayFail2 = shouldFail("ArrayFail2")
   @Test def testArrayFail3 = shouldFail("ArrayFail3")
-
+  // passing
+  @Test def testArrayWhileVar = shouldOutput("ArrayWhileVar")
 }

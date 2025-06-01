@@ -1,0 +1,4 @@
+object TestArray2 
+val i : Int(32)[] = new Int(32)[10];
+i[3] = false 
+end TestArray2

@@ -67,4 +67,13 @@ class NameAnalyzerTests extends TestSuite {
   @Test def testUndefinedType = shouldFail("UndefinedType")
   @Test def testUndefinedVariable = shouldFail("UndefinedVariable")
   @Test def testUnknownParent = shouldFail("UnknownParent")
+  //our tests 
+  //failing
+  @Test def testUndefinedMutableVar = shouldFail("unknownMutableVar")
+  @Test def testUpdatingUnmutableVal = shouldFail("UpdatingVal")
+  @Test def testUndefinedArray = shouldFail("unknownArrayName")
+  @Test def testOrderVar = shouldFail("ReassignmentBeforeInit")
+  //passing
+  @Test def testArrayAndVar = shouldOutput("ArrayAndVar")
+  
 }

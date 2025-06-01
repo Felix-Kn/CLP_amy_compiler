@@ -76,5 +76,18 @@ class TyperTests extends TestSuite {
   @Test def testSeqWithError = shouldPass("SeqWithError")
   @Test def testLetWithError = shouldPass("LetWithError")
   @Test def testError = shouldPass("Error")
+  //our tests
+  @Test def testWhile1 = shouldFail("WhileNotBool")
+  @Test def testWhile2 = shouldFail("WhileUnit")
+  @Test def testVar1 = shouldFail("TestVar1")
+  @Test def testVar2 = shouldFail("TestVar2")
+  @Test def testArray1 = shouldFail("TestArray1")
+  @Test def testArray2 = shouldFail("TestArray2")
+  @Test def testArray3 = shouldFail("TestArray3")
+  @Test def testArray4 = shouldFail("TestArray4")
+  @Test def testArray5 = shouldFail("TestArray5")
+
+  //passing
+  @Test def testWhileVarArray = shouldPass("TestWhileVarArray")
 
 }

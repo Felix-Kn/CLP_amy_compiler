@@ -1,0 +1,8 @@
+object TestWhile1 
+var i : Boolean = true; 
+while (i) {
+    i = false
+} match {
+    case true => i = false
+}
+end TestWhile1
